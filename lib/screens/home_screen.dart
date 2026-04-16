@@ -1,0 +1,126 @@
+import 'package:flutter/material.dart';
+import '../utils/localization.dart';
+import '../providers/locale_provider.dart';
+import 'package:provider/provider.dart';
+import '../providers/theme_provider.dart';
+import 'qr_generator_screen.dart';
+import 'barcode_generator_screen.dart';
+import 'scanner_screen.dart';
+import 'history_screen.dart';
+import 'batch_generator_screen.dart';
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  int _currentIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = AppLocalizations.of;
+
+    final tabs = [
+      const QrGeneratorScreen(), // QR Generator Screen
+      const BarcodeGeneratorScreen(), // Barcode Generator Screen
+      const ScannerScreen(), // Scanner Screen
+      const HistoryScreen(), // History Screen
+      _buildSettingsTab(context),
+    ];
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(loc(context, 'app_name')),
+        centerTitle: true,
+        elevation: 2,
+        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+      ),
+      body: SafeArea(
+        child: tabs[_currentIndex],
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentIndex,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        onDestinationSelected: (idx) {
+          setState(() {
+            _currentIndex = idx;
+          });
+        },
+        destinations: [
+          NavigationDestination(
+            icon: const Icon(Icons.qr_code_2),
+            label: loc(context, 'qr_generator'),
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.view_column),
+            label: loc(context, 'barcode_generator'),
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.document_scanner),
+            label: loc(context, 'scanner'),
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.history),
+            label: loc(context, 'history'),
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.settings),
+            label: loc(context, 'settings'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettingsTab(BuildContext context) {
+    final localeProvider = Provider.of<LocaleProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final loc = AppLocalizations.of;
+
+    return ListView(
+      padding: const EdgeInsets.all(16.0),
+      children: [
+        SwitchListTile(
+          value: themeProvider.themeMode == ThemeMode.dark,
+          onChanged: (val) {
+            themeProvider.toggleTheme(val);
+          },
+          title: Text(loc(context, 'dark_mode')),
+          secondary: Icon(themeProvider.themeMode == ThemeMode.dark ? Icons.dark_mode : Icons.light_mode),
+        ),
+        const Divider(),
+        ListTile(
+          leading: const Icon(Icons.language),
+          title: Text(loc(context, 'language')),
+          trailing: DropdownButton<String>(
+            value: localeProvider.locale.languageCode,
+            underline: const SizedBox(),
+            items: const [
+              DropdownMenuItem(value: 'en', child: Text('English')),
+              DropdownMenuItem(value: 'ar', child: Text('العربية')),
+              DropdownMenuItem(value: 'fr', child: Text('Français')),
+            ],
+            onChanged: (val) {
+              if (val != null) {
+                localeProvider.setLocale(Locale(val));
+              }
+            },
+          ),
+        ),
+        const Divider(),
+        ListTile(
+          leading: const Icon(Icons.batch_prediction),
+          title: Text(loc(context, 'batch_generation')),
+          subtitle: const Text('CSV/Excel Support'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const BatchGeneratorScreen()));
+          },
+        ),
+      ],
+    );
+  }
+}
