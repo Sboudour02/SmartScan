@@ -7,6 +7,7 @@ import 'package:csv/csv.dart';
 import 'package:excel/excel.dart';
 import 'package:archive/archive.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:barcode_widget/barcode_widget.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../utils/localization.dart';
@@ -25,6 +26,29 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
   double _progress = 0.0;
   String _statusMessage = '';
   int _generatedCount = 0;
+
+  String _selectedFormat = 'QR Code';
+  final List<String> _formats = [
+    'QR Code',
+    'Code 128',
+    'EAN-13',
+    'EAN-8',
+    'UPC-A',
+    'UPC-E',
+    'ITF'
+  ];
+
+  Barcode _getBarcodeFromFormat(String format) {
+    switch (format) {
+      case 'Code 128': return Barcode.code128();
+      case 'EAN-13': return Barcode.ean13();
+      case 'EAN-8': return Barcode.ean8();
+      case 'UPC-A': return Barcode.upcA();
+      case 'UPC-E': return Barcode.upcE();
+      case 'ITF': return Barcode.itf();
+      default: return Barcode.code128();
+    }
+  }
 
   Future<void> _pickFile() async {
     final result = await FilePicker.pickFiles(
@@ -133,7 +157,16 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
 
       for (int i = 0; i < total; i++) {
         final data = _parsedData[i];
-        final pngBytes = await _generateQrImage(data);
+        final Uint8List pngBytes;
+        if (_selectedFormat == 'QR Code') {
+          pngBytes = await _generateQrImage(data);
+        } else {
+          try {
+             pngBytes = await _generateBarcodeImage(data, _getBarcodeFromFormat(_selectedFormat));
+          } catch(e) {
+             throw Exception('Failed on element "$data": $e');
+          }
+        }
 
         // Sanitize filename: replace invalid chars
         final safeName = data
@@ -194,6 +227,75 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
         );
       }
     }
+  }
+
+  Future<Uint8List> _generateBarcodeImage(String data, Barcode barcodeType) async {
+    final imageSize = 512.0;
+    final barcodeWidth = 480.0;
+    final barcodeHeight = 240.0;
+    
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+
+    // Fill white background
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, imageSize, imageSize),
+      Paint()..color = const Color(0xFFFFFFFF),
+    );
+
+    final recipe = barcodeType.make(
+      data,
+      width: barcodeWidth,
+      height: barcodeHeight,
+      drawText: true,
+      fontHeight: 48,
+      textPadding: 16,
+    );
+
+    final barStyle = Paint()..color = const Color(0xFF000000);
+    final dx = (imageSize - barcodeWidth) / 2;
+    final dy = (imageSize - barcodeHeight) / 2;
+
+    for (var element in recipe) {
+      if (element is BarcodeBar) {
+        if (element.black) {
+          canvas.drawRect(
+            Rect.fromLTWH(
+              dx + element.left,
+              dy + element.top,
+              element.width,
+              element.height,
+            ),
+            barStyle,
+          );
+        }
+      } else if (element is BarcodeText) {
+        final align = element.align == BarcodeTextAlign.left ? TextAlign.left : 
+                      element.align == BarcodeTextAlign.right ? TextAlign.right : TextAlign.center;
+        
+        final builder = ui.ParagraphBuilder(
+          ui.ParagraphStyle(
+            textAlign: align,
+            fontSize: element.height,
+          ),
+        )
+          ..pushStyle(ui.TextStyle(color: const Color(0xFF000000)))
+          ..addText(element.text);
+        final paragraph = builder.build();
+        paragraph.layout(ui.ParagraphConstraints(width: element.width));
+        
+        canvas.drawParagraph(
+          paragraph,
+          Offset(dx + element.left, dy + element.top + paragraph.alphabeticBaseline - paragraph.height),
+        );
+      }
+    }
+
+    final picture = recorder.endRecording();
+    final img = await picture.toImage(imageSize.toInt(), imageSize.toInt());
+    final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+
+    return byteData!.buffer.asUint8List();
   }
 
   /// Generate a QR code as a PNG Uint8List using QrPainter
@@ -257,7 +359,7 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      loc(context, 'batch_instructions'),
+                      'Upload a CSV or Excel (.xlsx) file.\nThe first column will be used to generate QR codes or Barcodes.\nAll codes will be exported as a ZIP file.',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodyLarge,
                     ),
@@ -266,6 +368,50 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
               ),
             ),
             const SizedBox(height: 24),
+
+            // Select Format
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(loc(context, 'choose_format') + ':', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _selectedFormat,
+                        items: _formats.map((f) => DropdownMenuItem(value: f, child: Text(f))).toList(),
+                        onChanged: (val) {
+                          if (val != null) setState(() => _selectedFormat = val);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            
+            // Warning for numeric formats
+            if (['EAN-13', 'EAN-8', 'UPC-A', 'UPC-E', 'ITF'].contains(_selectedFormat))
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Please ensure your CSV/Excel file contains valid numbers in the first column for $_selectedFormat.',
+                        style: const TextStyle(color: Colors.orange, fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            
+            const SizedBox(height: 16),
 
             // Select File Button
             OutlinedButton.icon(
@@ -324,7 +470,11 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 2.0),
                         child: Row(
                           children: [
-                            Icon(Icons.qr_code_2, size: 16, color: Theme.of(context).colorScheme.primary),
+                            Icon(
+                               Uri.tryParse(item)?.hasScheme == true ? Icons.qr_code_2 : RegExp(r'^\d+$').hasMatch(item) ? Icons.view_week : Icons.qr_code_2, 
+                               size: 16, 
+                               color: Theme.of(context).colorScheme.primary
+                            ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
@@ -438,7 +588,7 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
                   onPressed: _generateAndExport,
                   icon: const Icon(Icons.auto_awesome, size: 22),
                   label: Text(
-                    '${loc(context, 'generate')} ${_parsedData.length} QR',
+                    '${loc(context, 'generate')} ${_parsedData.length} ${_selectedFormat == 'QR Code' ? 'QR' : _selectedFormat}',
                     style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                   ),
                   style: ElevatedButton.styleFrom(

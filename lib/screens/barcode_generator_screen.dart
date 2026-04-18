@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:barcode_widget/barcode_widget.dart';
 import 'package:provider/provider.dart';
 import '../utils/export_helper.dart';
@@ -35,6 +36,32 @@ class _BarcodeGeneratorScreenState extends State<BarcodeGeneratorScreen> {
   late Map<String, dynamic> _selectedType;
   late TextEditingController _dataController;
   String _barcodeData = '';
+
+  bool _isNumericFormat(String typeName) {
+    return ['EAN-13', 'EAN-8', 'UPC-A', 'UPC-E', 'ITF'].contains(typeName);
+  }
+
+  String _getErrorMessage(String error) {
+    final lowerError = error.toLowerCase();
+    final typeName = _selectedType['name'];
+    
+    if (lowerError.contains('length') || lowerError.contains('digit') || lowerError.contains('short') || lowerError.contains('long')) {
+      if (typeName == 'EAN-13') return 'Invalid length. EAN-13 requires 12 or 13 digits.';
+      if (typeName == 'EAN-8') return 'Invalid length. EAN-8 requires 7 or 8 digits.';
+      if (typeName == 'UPC-A') return 'Invalid length. UPC-A requires 11 or 12 digits.';
+      if (typeName == 'UPC-E') return 'Invalid length. UPC-E requires 6, 7, or 8 digits.';
+      if (typeName == 'ITF') return 'Invalid length. ITF requires an even number of digits.';
+      return 'Invalid length for $typeName.';
+    } else if (lowerError.contains('checksum')) {
+      return 'Invalid checksum digit. Please verify your sequence.';
+    } else if (lowerError.contains('character') || lowerError.contains('sequence') || lowerError.contains('valid')) {
+      if (_isNumericFormat(typeName)) {
+        return 'Error: This format accepts numbers only.';
+      }
+      return 'Invalid sequence or characters for $typeName.';
+    }
+    return error;
+  }
 
   @override
   void initState() {
@@ -146,7 +173,7 @@ class _BarcodeGeneratorScreenState extends State<BarcodeGeneratorScreen> {
                       ),
                       child: BarcodeWidget(
                         barcode: _selectedType['barcode'],
-                        data: _barcodeData.isEmpty ? ' ' : _barcodeData,
+                        data: _barcodeData.isEmpty ? _selectedType['default'] : _barcodeData,
                         width: double.infinity,
                         height: 120,
                         style: const TextStyle(
@@ -154,10 +181,14 @@ class _BarcodeGeneratorScreenState extends State<BarcodeGeneratorScreen> {
                           fontWeight: FontWeight.bold,
                           letterSpacing: 2,
                         ),
-                        errorBuilder: (context, error) => const Center(
-                          child: Text(
-                            'Invalid sequence',
-                            style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
+                        errorBuilder: (context, error) => Center(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                            child: Text(
+                              _getErrorMessage(error),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
+                            ),
                           ),
                         ),
                       ),
@@ -223,9 +254,17 @@ class _BarcodeGeneratorScreenState extends State<BarcodeGeneratorScreen> {
             TextFormField(
               controller: _dataController,
               style: const TextStyle(fontSize: 18, letterSpacing: 1.2),
+              keyboardType: _isNumericFormat(_selectedType['name']) 
+                  ? TextInputType.number 
+                  : TextInputType.text,
+              inputFormatters: _isNumericFormat(_selectedType['name']) 
+                  ? [FilteringTextInputFormatter.digitsOnly] 
+                  : null,
               decoration: InputDecoration(
                 labelText: loc(context, 'content_type'),
-                hintText: loc(context, 'barcode_input_hint'),
+                hintText: _isNumericFormat(_selectedType['name']) 
+                    ? 'Enter numbers only...' 
+                    : 'Enter text or numbers...',
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
                 prefixIcon: const Icon(Icons.view_week_outlined),
                 suffixIcon: IconButton(
