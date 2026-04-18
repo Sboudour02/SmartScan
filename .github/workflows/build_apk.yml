@@ -36,8 +36,11 @@ jobs:
       - name: Build APK
         run: flutter build apk --release
 
+      - name: Rename APK
+        run: mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/SmartScan.apk
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SmartScan-Release-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: SmartScan
+          path: build/app/outputs/flutter-apk/SmartScan.apk
