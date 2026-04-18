@@ -64,4 +64,11 @@ class HistoryManager {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_key);
   }
+
+  static Future<void> deleteHistory(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    List<HistoryItem> history = await getHistory();
+    history.removeWhere((item) => item.id == id);
+    await prefs.setString(_key, jsonEncode(history.map((e) => e.toJson()).toList()));
+  }
 }

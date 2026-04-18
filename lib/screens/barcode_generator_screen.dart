@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:barcode_widget/barcode_widget.dart';
+import 'package:provider/provider.dart';
 import '../utils/export_helper.dart';
 import '../utils/history_manager.dart';
 import '../utils/localization.dart';
+import '../utils/security_helper.dart';
+import '../providers/locale_provider.dart';
 
 class BarcodeGeneratorScreen extends StatefulWidget {
   const BarcodeGeneratorScreen({super.key});
@@ -37,8 +40,8 @@ class _BarcodeGeneratorScreenState extends State<BarcodeGeneratorScreen> {
   void initState() {
     super.initState();
     _selectedType = _barcodeTypes[0];
-    _dataController = TextEditingController(text: _selectedType['default']);
-    _barcodeData = _selectedType['default'];
+    _dataController = TextEditingController();
+    _barcodeData = '';
   }
 
   @override
@@ -51,14 +54,39 @@ class _BarcodeGeneratorScreenState extends State<BarcodeGeneratorScreen> {
     if (newType == null) return;
     setState(() {
       _selectedType = newType;
-      // Provide a valid default placeholder to prevent "Invalid data sequence" UI flashes
-      _dataController.text = newType['default'];
-      _barcodeData = newType['default'];
+      // Keep current user input when switching types; clear only if empty
+      // Don't overwrite with format default — let the user type their own data
     });
   }
 
   Future<void> _handleExport() async {
     if (_barcodeData.trim().isEmpty) return;
+
+    // ═══ 🛡️ AntiGravity Security Check ═══
+    final securityResult = SecurityHelper.analyzeContent(_barcodeData);
+    final langCode = mounted
+        ? Provider.of<LocaleProvider>(context, listen: false).locale.languageCode
+        : 'en';
+
+    if (securityResult.level == SecurityLevel.blocked) {
+      if (mounted) {
+        await SecurityHelper.handleSecurityResult(context, securityResult, langCode: langCode);
+      }
+      return;
+    }
+
+    if (securityResult.level == SecurityLevel.warning) {
+      if (mounted) {
+        final proceed = await SecurityHelper.handleSecurityResult(context, securityResult, langCode: langCode);
+        if (!proceed) return;
+      }
+    }
+
+    if (securityResult.level == SecurityLevel.sanitized && mounted) {
+      await SecurityHelper.handleSecurityResult(context, securityResult, langCode: langCode);
+      setState(() => _barcodeData = securityResult.sanitizedContent ?? _barcodeData);
+    }
+    // ═══ End Security Check ═══
     
     // Add to History
     await HistoryManager.addHistory(HistoryItem(
@@ -148,28 +176,44 @@ class _BarcodeGeneratorScreenState extends State<BarcodeGeneratorScreen> {
             const SizedBox(height: 12),
             SizedBox(
               height: 50,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: _barcodeTypes.length,
-                itemBuilder: (context, index) {
-                  final type = _barcodeTypes[index];
-                  final isSelected = _selectedType['name'] == type['name'];
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: ChoiceChip(
-                      label: Text(type['name']),
-                      selected: isSelected,
-                      onSelected: (selected) {
-                        if (selected) _onTypeChanged(type);
-                      },
-                      selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
-                      labelStyle: TextStyle(
-                        color: isSelected ? Theme.of(context).colorScheme.primary : null,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      ),
-                    ),
-                  );
+              child: ShaderMask(
+                shaderCallback: (Rect bounds) {
+                  return LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [
+                      Colors.white,
+                      Colors.white,
+                      Colors.white,
+                      Colors.white.withValues(alpha: 0.0),
+                    ],
+                    stops: const [0.0, 0.7, 0.85, 1.0],
+                  ).createShader(bounds);
                 },
+                blendMode: BlendMode.dstIn,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _barcodeTypes.length,
+                  itemBuilder: (context, index) {
+                    final type = _barcodeTypes[index];
+                    final isSelected = _selectedType['name'] == type['name'];
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: ChoiceChip(
+                        label: Text(type['name']),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          if (selected) _onTypeChanged(type);
+                        },
+                        selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                        labelStyle: TextStyle(
+                          color: isSelected ? Theme.of(context).colorScheme.primary : null,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
             
@@ -181,8 +225,9 @@ class _BarcodeGeneratorScreenState extends State<BarcodeGeneratorScreen> {
               style: const TextStyle(fontSize: 18, letterSpacing: 1.2),
               decoration: InputDecoration(
                 labelText: loc(context, 'content_type'),
+                hintText: loc(context, 'barcode_input_hint'),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                prefixIcon: const Icon(Icons.qr_code),
+                prefixIcon: const Icon(Icons.view_week_outlined),
                 suffixIcon: IconButton(
                   icon: const Icon(Icons.clear),
                   onPressed: () {

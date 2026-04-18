@@ -3,8 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:provider/provider.dart';
 import '../utils/history_manager.dart';
 import '../utils/localization.dart';
+import '../utils/security_helper.dart';
+import '../providers/locale_provider.dart';
 
 class ScannerScreen extends StatefulWidget {
   const ScannerScreen({super.key});
@@ -45,7 +48,47 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
     if (barcode.rawValue != null && barcode.rawValue != _barcodeValue) {
       setState(() {
         _isProcessing = true;
-        _barcodeValue = barcode.rawValue;
+      });
+
+      final rawValue = barcode.rawValue!;
+
+      // ═══ 🛡️ AntiGravity Security Check ═══
+      final securityResult = SecurityHelper.analyzeContent(rawValue);
+      final langCode = mounted
+          ? Provider.of<LocaleProvider>(context, listen: false).locale.languageCode
+          : 'en';
+
+      if (securityResult.level == SecurityLevel.blocked) {
+        // 🚫 BLOCK — Malicious content detected
+        if (mounted) {
+          await SecurityHelper.handleSecurityResult(context, securityResult, langCode: langCode);
+          setState(() => _isProcessing = false);
+        }
+        return;
+      }
+
+      if (securityResult.level == SecurityLevel.warning) {
+        // ⚠️ WARN — Ask user confirmation
+        if (mounted) {
+          final proceed = await SecurityHelper.handleSecurityResult(context, securityResult, langCode: langCode);
+          if (!proceed) {
+            setState(() => _isProcessing = false);
+            return;
+          }
+        }
+      }
+
+      if (securityResult.level == SecurityLevel.sanitized && mounted) {
+        // 🧹 SANITIZED — Notify user, use clean version
+        await SecurityHelper.handleSecurityResult(context, securityResult, langCode: langCode);
+      }
+
+      // Use sanitized content if available, otherwise original
+      final safeValue = securityResult.sanitizedContent ?? rawValue;
+      // ═══ End Security Check ═══
+
+      setState(() {
+        _barcodeValue = safeValue;
         _barcodeType = barcode.format.name;
       });
 
@@ -53,7 +96,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
       await HistoryManager.addHistory(HistoryItem(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         type: 'Scan',
-        content: _barcodeValue!,
+        content: safeValue,
         timestamp: DateTime.now(),
       ));
 
@@ -192,7 +235,8 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                 onPressed: _pickImageFromGallery,
               ),
               IconButton(
-                icon: const Icon(Icons.flip_camera_ios, color: Colors.white, size: 32),
+                icon: const Icon(Icons.cameraswitch_rounded, color: Colors.white, size: 32),
+                tooltip: 'Switch Camera',
                 onPressed: () => _scannerController.switchCamera(),
               ),
             ],
@@ -220,11 +264,34 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                     children: [
                       Icon(Icons.qr_code_scanner, color: Theme.of(context).colorScheme.primary),
                       const SizedBox(width: 8),
-                      Text(
-                        _barcodeType ?? 'Result',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontWeight: FontWeight.bold,
+                      Expanded(
+                        child: Text(
+                          _barcodeType ?? 'Result',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      Material(
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(20),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(20),
+                          onTap: () {
+                            setState(() {
+                              _barcodeValue = null;
+                              _barcodeType = null;
+                            });
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.all(4.0),
+                            child: Icon(
+                              Icons.close_rounded,
+                              size: 20,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
                         ),
                       ),
                     ],

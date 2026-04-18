@@ -3,6 +3,7 @@ import '../utils/localization.dart';
 import '../providers/locale_provider.dart';
 import 'package:provider/provider.dart';
 import '../providers/theme_provider.dart';
+import '../utils/environment_security.dart';
 import 'qr_generator_screen.dart';
 import 'barcode_generator_screen.dart';
 import 'scanner_screen.dart';
@@ -18,6 +19,22 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _runSecurityChecks();
+    });
+  }
+
+  Future<void> _runSecurityChecks() async {
+    final results = await EnvironmentSecurity.checkEnvironment();
+    if (!mounted) return;
+    
+    final langCode = Provider.of<LocaleProvider>(context, listen: false).locale.languageCode;
+    await EnvironmentSecurity.showEnvironmentWarnings(context, results, langCode: langCode);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,11 +69,11 @@ class _HomeScreenState extends State<HomeScreen> {
         destinations: [
           NavigationDestination(
             icon: const Icon(Icons.qr_code_2),
-            label: loc(context, 'qr_generator'),
+            label: loc(context, 'qr_short'),
           ),
           NavigationDestination(
             icon: const Icon(Icons.view_column),
-            label: loc(context, 'barcode_generator'),
+            label: loc(context, 'barcode_short'),
           ),
           NavigationDestination(
             icon: const Icon(Icons.document_scanner),

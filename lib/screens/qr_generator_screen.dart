@@ -2,9 +2,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 import '../utils/export_helper.dart';
 import '../utils/history_manager.dart';
 import '../utils/localization.dart';
+import '../utils/security_helper.dart';
+import '../providers/locale_provider.dart';
 
 class QrGeneratorScreen extends StatefulWidget {
   const QrGeneratorScreen({super.key});
@@ -21,6 +24,16 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
   bool _isRoundEye = false;
   String? _logoPath;
   String _selectedTemplate = 'URL';
+  String _selectedSize = 'Medium';
+  String _selectedFormat = 'PNG';
+
+  final Map<String, double> _sizeMap = {
+    'Small': 150.0,
+    'Medium': 200.0,
+    'Large': 300.0,
+  };
+
+  final List<String> _formats = ['PNG', 'JPEG', 'PDF', 'SVG'];
   
   final TextEditingController _dataController = TextEditingController(text: 'https://smartscan.example.com');
   final TextEditingController _wifiSsidController = TextEditingController();
@@ -104,6 +117,32 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
 
   Future<void> _handleExport() async {
     if (_qrData.trim().isEmpty) return;
+
+    // ═══ 🛡️ AntiGravity Security Check before export ═══
+    final securityResult = SecurityHelper.analyzeContent(_qrData);
+    final langCode = mounted
+        ? Provider.of<LocaleProvider>(context, listen: false).locale.languageCode
+        : 'en';
+
+    if (securityResult.level == SecurityLevel.blocked) {
+      if (mounted) {
+        await SecurityHelper.handleSecurityResult(context, securityResult, langCode: langCode);
+      }
+      return;
+    }
+
+    if (securityResult.level == SecurityLevel.warning) {
+      if (mounted) {
+        final proceed = await SecurityHelper.handleSecurityResult(context, securityResult, langCode: langCode);
+        if (!proceed) return;
+      }
+    }
+
+    if (securityResult.level == SecurityLevel.sanitized && mounted) {
+      await SecurityHelper.handleSecurityResult(context, securityResult, langCode: langCode);
+      setState(() => _qrData = securityResult.sanitizedContent ?? _qrData);
+    }
+    // ═══ End Security Check ═══
     
     // Add to History
     await HistoryManager.addHistory(HistoryItem(
@@ -114,11 +153,29 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
     ));
 
     if (mounted) {
-      ExportHelper.showExportDialog(
-        context: context,
-        boundaryKey: _globalKey,
-        fileName: 'qrcode',
-      );
+      final format = _selectedFormat.toLowerCase();
+      if (format == 'pdf') {
+        ExportHelper.exportPDF(
+          context: context,
+          key: _globalKey,
+          fileName: 'qrcode',
+          isShare: true,
+        );
+      } else if (format == 'svg') {
+        ExportHelper.exportSVG(
+          context: context,
+          qrData: _qrData,
+          fileName: 'qrcode',
+        );
+      } else {
+        ExportHelper.exportBoundary(
+          context: context,
+          key: _globalKey,
+          fileName: 'qrcode',
+          ext: format,
+          isShare: true,
+        );
+      }
     }
   }
 
@@ -164,7 +221,7 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
                         child: QrImageView(
                           data: _qrData.isEmpty ? ' ' : _qrData,
                           version: QrVersions.auto,
-                          size: 200.0,
+                          size: _sizeMap[_selectedSize] ?? 200.0,
                           eyeStyle: QrEyeStyle(
                             eyeShape: _isRoundEye ? QrEyeShape.circle : QrEyeShape.square,
                             color: _qrColor,
@@ -195,37 +252,47 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
               style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
-            SizedBox(
-              height: 50,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: _templates.length,
-                itemBuilder: (context, index) {
-                  final t = _templates[index];
-                  final isSelected = _selectedTemplate == t;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: ChoiceChip(
-                      label: Text(t),
-                      selected: isSelected,
-                      onSelected: (selected) {
-                        if (selected) {
-                          setState(() {
-                            _selectedTemplate = t;
-                            _selectedTemplate = t;
-                            _clearAllControllers();
-                            _updateQrData();
-                          });
-                        }
-                      },
-                      selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
-                      labelStyle: TextStyle(
-                        color: isSelected ? Theme.of(context).colorScheme.primary : null,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            ShaderMask(
+              shaderCallback: (Rect bounds) {
+                return const LinearGradient(
+                  begin: Alignment(0.85, 0),
+                  end: Alignment.centerRight,
+                  colors: [Colors.white, Colors.transparent],
+                ).createShader(bounds);
+              },
+              blendMode: BlendMode.dstIn,
+              child: SizedBox(
+                height: 50,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _templates.length,
+                  padding: const EdgeInsets.only(right: 24),
+                  itemBuilder: (context, index) {
+                    final t = _templates[index];
+                    final isSelected = _selectedTemplate == t;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: ChoiceChip(
+                        label: Text(t),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          if (selected) {
+                            setState(() {
+                              _selectedTemplate = t;
+                              _clearAllControllers();
+                              _updateQrData();
+                            });
+                          }
+                        },
+                        selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                        labelStyle: TextStyle(
+                          color: isSelected ? Theme.of(context).colorScheme.primary : null,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
             const SizedBox(height: 24),
@@ -324,21 +391,25 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
                 onChanged: (_) => _updateQrData(),
               ),
             ] else ...[
-              TextFormField(
+               TextFormField(
                 controller: _dataController,
-                style: const TextStyle(fontSize: 16),
+                style: const TextStyle(fontSize: 14),
+                scrollPhysics: const BouncingScrollPhysics(),
                 decoration: InputDecoration(
                   labelText: _selectedTemplate,
-                  hintText: 'Enter text here...',
+                  hintText: _selectedTemplate == 'URL' ? 'https://example.com' : 'Enter text here...',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
                   prefixIcon: Icon(_selectedTemplate == 'URL' ? Icons.link : Icons.edit),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.clear),
-                    onPressed: () {
-                      _dataController.clear();
-                      _updateQrData();
-                    },
-                  ),
+                  suffixIcon: _dataController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 20),
+                        tooltip: 'Clear',
+                        onPressed: () {
+                          _dataController.clear();
+                          _updateQrData();
+                        },
+                      )
+                    : null,
                 ),
                 onChanged: (_) => _updateQrData(),
                 maxLines: _selectedTemplate == 'Free Input' ? 3 : 1,
@@ -418,15 +489,84 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // Pick Logo
-                  ElevatedButton.icon(
+                  // QR Code Size
+                  Text(
+                    'QR Code Size',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: _sizeMap.keys.map((size) {
+                      final isSelected = _selectedSize == size;
+                      return ChoiceChip(
+                        label: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              size == 'Small' ? Icons.photo_size_select_small
+                                : size == 'Medium' ? Icons.photo_size_select_actual
+                                : Icons.photo_size_select_large,
+                              size: 16,
+                              color: isSelected ? Theme.of(context).colorScheme.primary : null,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(size),
+                          ],
+                        ),
+                        selected: isSelected,
+                        onSelected: (val) {
+                          if (val) setState(() => _selectedSize = size);
+                        },
+                        selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Download Format
+                  Text(
+                    'Download Format',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: _formats.map((format) {
+                      final isSelected = _selectedFormat == format;
+                      return ChoiceChip(
+                        label: Text(format),
+                        selected: isSelected,
+                        onSelected: (val) {
+                          if (val) setState(() => _selectedFormat = format);
+                        },
+                        selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                        avatar: Icon(
+                          format == 'PDF' ? Icons.picture_as_pdf
+                            : format == 'SVG' ? Icons.draw
+                            : Icons.image,
+                          size: 18,
+                          color: isSelected ? Theme.of(context).colorScheme.primary : null,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Pick Logo (Secondary - Optional)
+                  OutlinedButton.icon(
                     onPressed: _pickLogo,
-                    icon: const Icon(Icons.add_photo_alternate),
-                    label: Text(loc(context, 'pick_logo')),
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 50),
-                      backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-                      foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
+                    icon: Icon(Icons.add_photo_alternate, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    label: Text(
+                      _logoPath != null ? '${loc(context, 'pick_logo')} ✓' : loc(context, 'pick_logo'),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 42),
+                      side: BorderSide(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.5)),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
@@ -434,18 +574,43 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
               ),
             ),
             
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
             
-            Center(
+            // Export Button (Primary - Main CTA)
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                gradient: LinearGradient(
+                  colors: _qrData.isEmpty
+                    ? [Colors.grey.shade400, Colors.grey.shade500]
+                    : [Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.tertiary],
+                ),
+                boxShadow: _qrData.isNotEmpty ? [
+                  BoxShadow(
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ] : null,
+              ),
               child: ElevatedButton.icon(
                 onPressed: _qrData.isEmpty ? null : _handleExport,
-                icon: const Icon(Icons.ios_share, size: 20),
+                icon: Icon(
+                  _selectedFormat == 'PDF' ? Icons.picture_as_pdf
+                    : _selectedFormat == 'SVG' ? Icons.draw
+                    : Icons.download_rounded,
+                  size: 22,
+                ),
                 label: Text(
-                  loc(context, 'export'),
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  '${loc(context, 'export')} ($_selectedFormat)',
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                 ),
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 32),
+                  minimumSize: const Size(double.infinity, 56),
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
               ),

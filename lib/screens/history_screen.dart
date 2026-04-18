@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../utils/history_manager.dart';
 import '../utils/localization.dart';
 import '../utils/export_helper.dart';
+import '../utils/security_helper.dart';
+import '../providers/locale_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:barcode_widget/barcode_widget.dart';
 
@@ -98,7 +101,23 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  void _showHistoryItemDialog(BuildContext context, HistoryItem item) {
+  void _showHistoryItemDialog(BuildContext context, HistoryItem item) async {
+    // ═══ 🛡️ AntiGravity Security Check ═══
+    if (SecurityHelper.containsSensitiveData(item.content)) {
+      final langCode = mounted
+          ? Provider.of<LocaleProvider>(context, listen: false).locale.languageCode
+          : 'en';
+      final shouldDelete = await SecurityHelper.showSensitiveDataHistoryWarning(context, langCode: langCode);
+      if (shouldDelete) {
+        await HistoryManager.deleteHistory(item.id);
+        _loadHistory();
+        return;
+      }
+    }
+    // ═══ End Security Check ═══
+
+    if (!context.mounted) return;
+
     final GlobalKey boundaryKey = GlobalKey();
     
     showDialog(
