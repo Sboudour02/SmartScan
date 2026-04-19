@@ -37,7 +37,7 @@ jobs:
         uses: shorebirdtech/setup-shorebird@v1
 
       - name: Build Shorebird Release (APK)
-        run: shorebird release android --artifact apk --force
+        run: shorebird release android --artifact apk
         env:
           SHOREBIRD_TOKEN: sb_api_ElTB6fTessQCWU0YPX_HAX1AGktByIqC4l8dZPhEnx0
 
