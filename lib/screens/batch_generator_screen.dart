@@ -340,28 +340,35 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(loc(context, 'batch_generation'))),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
+        padding: EdgeInsets.only(
+          top: 24.0,
+          left: 24.0,
+          right: 24.0,
+          bottom: MediaQuery.of(context).padding.bottom + 24.0,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Instructions Card
+            // Instructions Banner
             Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              elevation: 0,
+              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
+                padding: const EdgeInsets.all(12.0),
+                child: Row(
                   children: [
                     Icon(
-                      Icons.description_outlined,
-                      size: 56,
+                      Icons.info_outline,
+                      size: 28,
                       color: Theme.of(context).colorScheme.primary,
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Upload a CSV or Excel (.xlsx) file.\nThe first column will be used to generate QR codes or Barcodes.\nAll codes will be exported as a ZIP file.',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyLarge,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Upload a CSV or Excel file. The first column generates the codes, exported as a ZIP.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
                     ),
                   ],
                 ),
@@ -378,7 +385,7 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(loc(context, 'choose_format') + ':', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    Text('${loc(context, 'choose_format')}:', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                     DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
                         value: _selectedFormat,
