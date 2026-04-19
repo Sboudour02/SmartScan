@@ -33,14 +33,26 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Build APK
-        run: flutter build apk --release
+      - name: Setup Shorebird
+        uses: shorebirdtech/setup-shorebird@v1
+
+      - name: Build Shorebird Release (APK)
+        run: shorebird release android --artifact apk --force
+        env:
+          SHOREBIRD_TOKEN: sb_api_ElTB6fTessQCWU0YPX_HAX1AGktByIqC4l8dZPhEnx0
 
       - name: Rename APK
-        run: mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/SmartScan.apk
+        run: |
+          if [ -f "build/app/outputs/flutter-apk/app-release.apk" ]; then
+            mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/SmartScan.apk
+          elif [ -f "build/app/outputs/apk/release/app-release.apk" ]; then
+            mv build/app/outputs/apk/release/app-release.apk build/app/outputs/apk/release/SmartScan.apk
+          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: SmartScan
-          path: build/app/outputs/flutter-apk/SmartScan.apk
+          path: |
+            build/app/outputs/flutter-apk/SmartScan.apk
+            build/app/outputs/apk/release/SmartScan.apk
