@@ -28,6 +28,8 @@ class _CustomBarcodeOverlayState extends State<CustomBarcodeOverlay>
   DeviceOrientation? _lastOrientation;
   int _orientationResetKey = 0;
 
+  List<Offset>? _smoothedCorners;
+
   @override
   void initState() {
     super.initState();
@@ -67,6 +69,41 @@ class _CustomBarcodeOverlayState extends State<CustomBarcodeOverlay>
     super.dispose();
   }
 
+  bool _isValidBarcodeGeometric(Barcode barcode) {
+    if (barcode.corners.length < 4) return false;
+    
+    // Only check 1D formats for geometric constraints
+    switch (barcode.format) {
+      case BarcodeFormat.ean13:
+      case BarcodeFormat.ean8:
+      case BarcodeFormat.upcA:
+      case BarcodeFormat.upcE:
+      case BarcodeFormat.code39:
+      case BarcodeFormat.code93:
+      case BarcodeFormat.code128:
+      case BarcodeFormat.itf:
+        final corners = barcode.corners;
+        final d1 = (corners[0] - corners[1]).distance;
+        final d2 = (corners[1] - corners[2]).distance;
+        
+        final maxSide = math.max(d1, d2);
+        final minSide = math.min(d1, d2);
+        
+        if (minSide == 0) return false; 
+        
+        final ratio = maxSide / minSide;
+        
+        // A valid 1D barcode is typically a rectangle (horizontal or vertical), 
+        // not a square or an extremely thin line.
+        return ratio >= 1.2 && ratio <= 6.0;
+        
+      default:
+        // 2D codes (QR, DataMatrix, PDF417) have different expected ratios
+        // QR codes are typically 1:1, so we allow them here.
+        return true;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<MobileScannerState>(
@@ -92,13 +129,24 @@ class _CustomBarcodeOverlayState extends State<CustomBarcodeOverlay>
               fit: StackFit.expand,
               children: [
                 for (final Barcode barcode in barcodeCapture.barcodes)
-                  if (barcode.corners.isNotEmpty)
+                  if (_isValidBarcodeGeometric(barcode))
                     AnimatedBuilder(
                       animation: _animationController,
                       builder: (context, child) {
+                        final targetCorners = barcode.corners;
+                        
+                        if (_smoothedCorners == null || _smoothedCorners!.length != targetCorners.length) {
+                          _smoothedCorners = List.from(targetCorners);
+                        } else {
+                          for (int i = 0; i < targetCorners.length; i++) {
+                            // Exponential smoothing for bounding box tracking (removes jitter)
+                            _smoothedCorners![i] = Offset.lerp(_smoothedCorners![i], targetCorners[i], 0.3)!;
+                          }
+                        }
+
                         return CustomPaint(
                           painter: _CustomBarcodePainter(
-                            barcodeCorners: barcode.corners,
+                            barcodeCorners: _smoothedCorners!,
                             barcodeFormat: barcode.format.name,
                             boxFit: widget.boxFit,
                             cameraPreviewSize: barcodeCapture.size,
@@ -230,15 +278,16 @@ class _CustomBarcodePainter extends CustomPainter {
     canvas.translate(-center.dx, -center.dy);
 
     // Glowing/Pulsing Paint
+    // Change to a more reassuring Green when geometrically valid
     final boundingBoxPaint = Paint()
-      ..color = const Color(0xFFFFD700)
+      ..color = const Color(0xFF00FF00) // Fresh matrix-like green
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3.5
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
     final glowPaint = Paint()
-      ..color = const Color(0xFFFFD700).withValues(alpha: 0.3 * animationValue)
+      ..color = const Color(0xFF00FF00).withValues(alpha: 0.3 * animationValue)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 10.0 + (5.0 * animationValue)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
@@ -252,7 +301,7 @@ class _CustomBarcodePainter extends CustomPainter {
 
     // Draw Corner Markers (L-shaped)
     final markerPaint = Paint()
-      ..color = const Color(0xFFFFD700)
+      ..color = const Color(0xFF00FF00)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 5.0
       ..strokeCap = StrokeCap.round;
@@ -321,7 +370,7 @@ class _CustomBarcodePainter extends CustomPainter {
       height: textHeight + 8,
     );
 
-    final textBgPaint = Paint()..color = const Color(0xFFFFD700);
+    final textBgPaint = Paint()..color = const Color(0xFF00FF00);
     canvas.drawRRect(
         RRect.fromRectAndRadius(textBgRect, const Radius.circular(6)),
         textBgPaint);

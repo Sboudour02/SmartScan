@@ -1,0 +1,35 @@
+name: Shorebird Patch Android
+
+on:
+  workflow_dispatch:
+
+jobs:
+  patch:
+    name: Build & Publish OTA Patch
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'oracle'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Setup Shorebird
+        uses: shorebirdtech/setup-shorebird@v1
+
+      - name: Publish Shorebird Patch
+        run: shorebird patch android --force
+        env:
+          SHOREBIRD_TOKEN: sb_api_ElTB6fTessQCWU0YPX_HAX1AGktByIqC4l8dZPhEnx0

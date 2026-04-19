@@ -32,6 +32,7 @@ class AppLocalizations {
       'preview': 'Preview:',
       'more_items': 'more items',
       'generate': 'Generate',
+      'cannot_open_link': 'Problem opening link',
     },
     'ar': {
       'app_name': 'سمارت سكان',
@@ -61,6 +62,7 @@ class AppLocalizations {
       'preview': 'معاينة:',
       'more_items': 'عناصر إضافية',
       'generate': 'توليد',
+      'cannot_open_link': 'تعذر فتح الرابط',
     },
     'fr': {
       'app_name': 'SmartScan',
@@ -90,6 +92,7 @@ class AppLocalizations {
       'preview': 'Aperçu :',
       'more_items': 'éléments supplémentaires',
       'generate': 'Générer',
+      'cannot_open_link': 'Problème d\'ouverture du lien',
     },
   };
 

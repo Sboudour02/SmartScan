@@ -28,6 +28,10 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
   String? _barcodeType;
   bool _isProcessing = false;
 
+  // Anti-False-Positive Local State
+  final Map<String, int> _barcodeDetectionCounts = {};
+  DateTime? _lastDetectionTime;
+
   late AnimationController _animationController;
 
   static final _urlRegex = RegExp(
@@ -71,35 +75,33 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
     if (_barcodeValue == null) return;
     String url = _barcodeValue!.trim();
     
-    if (!_hasSchemeRegex.hasMatch(url)) {
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
       url = 'https://$url';
     }
     
     final uri = Uri.tryParse(url);
-    if (uri != null) {
-      if (await canLaunchUrl(uri)) {
-        try {
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-        } catch (e) {
-          if (mounted) {
-            final loc = AppLocalizations.of;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(loc(context, 'cannot_open_link'))),
-            );
-          }
-        }
-      } else {
+    if (uri != null && await canLaunchUrl(uri)) {
+      try {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } catch (e) {
         if (mounted) {
           final loc = AppLocalizations.of;
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(loc(context, 'cannot_open_link'))),
+            SnackBar(
+              content: Text(loc(context, 'cannot_open_link')),
+              backgroundColor: Colors.redAccent,
+            ),
           );
         }
       }
     } else {
       if (mounted) {
+        final loc = AppLocalizations.of;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Invalid link format')),
+          SnackBar(
+            content: Text(loc(context, 'cannot_open_link')),
+            backgroundColor: Colors.redAccent,
+          ),
         );
       }
     }
@@ -120,14 +122,61 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
     super.dispose();
   }
 
+  bool _isValidBarcodeFormat(Barcode barcode) {
+    if (barcode.rawValue == null || barcode.rawValue!.isEmpty) return false;
+    final value = barcode.rawValue!;
+    
+    // We enforce length validation for common 1D barcodes that tend to throw false positives
+    switch (barcode.format) {
+      case BarcodeFormat.ean13:
+        return value.length == 13 && RegExp(r'^\d{13}$').hasMatch(value);
+      case BarcodeFormat.ean8:
+        return value.length == 8 && RegExp(r'^\d{8}$').hasMatch(value);
+      case BarcodeFormat.upcA:
+        return value.length == 12 && RegExp(r'^\d{12}$').hasMatch(value);
+      case BarcodeFormat.upcE:
+        return value.length == 6 && RegExp(r'^\d{6}$').hasMatch(value);
+      case BarcodeFormat.code39:
+      case BarcodeFormat.code93:
+      case BarcodeFormat.code128:
+      case BarcodeFormat.itf:
+        // These can have variable lengths, but checking if they are somewhat reasonable 
+        // helps avoid short noise (like 1 or 2 characters)
+        return value.length >= 3;
+      default:
+        // QR codes, DataMatrix, PDF417 etc are structurally safe and rarely false positive
+        return true;
+    }
+  }
+
   Future<void> _handleBarcode(Barcode barcode) async {
     if (_isProcessing) return;
-    if (barcode.rawValue != null && barcode.rawValue != _barcodeValue) {
+
+    if (!_isValidBarcodeFormat(barcode)) return;
+
+    // Debounce logic: wait for 2 consecutive detections within a recent time window
+    final now = DateTime.now();
+    final rawValue = barcode.rawValue!;
+
+    if (_lastDetectionTime != null && now.difference(_lastDetectionTime!).inMilliseconds > 500) {
+      // Clear stale detections if scanning was paused
+      _barcodeDetectionCounts.clear();
+    }
+    
+    _lastDetectionTime = now;
+    _barcodeDetectionCounts.update(rawValue, (count) => count + 1, ifAbsent: () => 1);
+
+    if (_barcodeDetectionCounts[rawValue]! < 2) {
+      // Not enough consecutive detections yet
+      return;
+    }
+
+    if (rawValue != _barcodeValue) {
+      // We have a confirmed detection!
+      _barcodeDetectionCounts.clear();
       setState(() {
         _isProcessing = true;
       });
-
-      final rawValue = barcode.rawValue!;
 
       // ═══ 🛡️ AntiGravity Security Check ═══
       final securityResult = SecurityHelper.analyzeContent(rawValue);
@@ -177,7 +226,8 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
         timestamp: DateTime.now(),
       ));
 
-      HapticFeedback.heavyImpact();
+      HapticFeedback.vibrate();
+      SystemSound.play(SystemSoundType.click);
       
       await Future.delayed(const Duration(seconds: 2));
       if (mounted) {
@@ -235,16 +285,19 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
           },
         ),
         
-        CustomBarcodeOverlay(controller: _scannerController),
+        // Only show the dynamic yellow bounding box overlay when actively scanning/showing result
+        if (_isProcessing || _barcodeValue != null)
+          CustomBarcodeOverlay(controller: _scannerController),
 
-        // Static Overlay & Scanning Animation Line (Hidden when barcode is tracked)
+        // Static Overlay & Scanning Animation Line
         StreamBuilder<BarcodeCapture>(
           stream: _scannerController.barcodes,
           builder: (context, snapshot) {
-            final capture = snapshot.data;
-            final isTracking = capture != null && capture.barcodes.isNotEmpty;
+            // Hide the static overlay ONLY when actively processing a barcode OR showing a result.
+            // This guarantees it reappears instantly upon dismissing the result card.
+            final shouldHideStaticOverlay = _isProcessing || _barcodeValue != null;
 
-            if (isTracking) {
+            if (shouldHideStaticOverlay) {
               return const SizedBox(); // Hide static overlay to focus on the yellow bounding box
             }
 
@@ -365,7 +418,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            _barcodeType ?? 'Result',
+                            'SmartScan',
                             style: TextStyle(
                               color: Theme.of(context).colorScheme.primary,
                               fontWeight: FontWeight.bold,
@@ -381,6 +434,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                               setState(() {
                                 _barcodeValue = null;
                                 _barcodeType = null;
+                                _isProcessing = false; // Reset the processing flag to immediately allow new scans
                               });
                             },
                             child: Padding(
