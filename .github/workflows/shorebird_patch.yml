@@ -30,6 +30,6 @@ jobs:
         uses: shorebirdtech/setup-shorebird@v1
 
       - name: Publish Shorebird Patch
-        run: shorebird patch android
+        run: shorebird release android
         env:
           SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
