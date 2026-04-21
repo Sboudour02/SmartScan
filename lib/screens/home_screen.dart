@@ -119,10 +119,37 @@ class _HomeScreenState extends State<HomeScreen> {
           trailing: DropdownButton<String>(
             value: localeProvider.locale.languageCode,
             underline: const SizedBox(),
-            items: const [
-              DropdownMenuItem(value: 'en', child: Text('English')),
-              DropdownMenuItem(value: 'ar', child: Text('العربية')),
-              DropdownMenuItem(value: 'fr', child: Text('Français')),
+            items: [
+              DropdownMenuItem(
+                value: 'en', 
+                child: Row(
+                  children: [
+                    Image.asset('assets/flags/uk.png', width: 24, height: 24),
+                    const SizedBox(width: 8),
+                    const Text('English'),
+                  ],
+                ),
+              ),
+              DropdownMenuItem(
+                value: 'ar', 
+                child: Row(
+                  children: [
+                    Image.asset('assets/flags/algeria.png', width: 24, height: 24),
+                    const SizedBox(width: 8),
+                    const Text('العربية'),
+                  ],
+                ),
+              ),
+              DropdownMenuItem(
+                value: 'fr', 
+                child: Row(
+                  children: [
+                    Image.asset('assets/flags/france.png', width: 24, height: 24),
+                    const SizedBox(width: 8),
+                    const Text('Français'),
+                  ],
+                ),
+              ),
             ],
             onChanged: (val) {
               if (val != null) {
