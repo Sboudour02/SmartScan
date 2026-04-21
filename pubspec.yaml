@@ -53,6 +53,9 @@ dependencies:
   file_saver: ^0.3.1
   qr: ^3.0.2
   url_launcher: ^6.3.2
+  http: ^1.2.2
+  ota_update: ^7.1.0
+  package_info_plus: ^8.1.2
 
 dev_dependencies:
   flutter_test:
