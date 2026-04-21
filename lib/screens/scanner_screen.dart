@@ -555,7 +555,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                         if (_isWifi)
                           ElevatedButton.icon(
                             onPressed: _copyWifiPassword,
-                            icon: const Icon(Icons.password),
+                            icon: const Icon(Icons.copy),
                             label: Text(loc(context, 'copy_password')),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Theme.of(context).colorScheme.primary,
@@ -565,7 +565,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                         if (_isVCard)
                           ElevatedButton.icon(
                             onPressed: _shareVCard,
-                            icon: const Icon(Icons.person_add),
+                            icon: const Icon(Icons.share),
                             label: Text(loc(context, 'add_contact')),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Theme.of(context).colorScheme.primary,
