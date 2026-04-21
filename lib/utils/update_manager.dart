@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:ota_update/ota_update.dart';
+import 'package:provider/provider.dart';
+import '../providers/locale_provider.dart';
 import 'localization.dart';
 
 class UpdateManager {
@@ -42,13 +44,10 @@ class UpdateManager {
   }
 
   static bool _isNewer(String latest, String current) {
-    // Simple semantic version comparison or direct string comparison
-    // For Flutter versioning (e.g. 1.0.1+3), we might want to split by +
     try {
       final latestParts = latest.split('+');
       final currentParts = current.split('+');
       
-      // Compare version name (1.0.1)
       final vLatest = latestParts[0].split('.');
       final vCurrent = currentParts[0].split('.');
       
@@ -59,7 +58,6 @@ class UpdateManager {
         if (l < c) return false;
       }
       
-      // Compare build number (3)
       if (latestParts.length > 1 && currentParts.length > 1) {
         final bLatest = int.parse(latestParts[1]);
         final bCurrent = int.parse(currentParts[1]);
@@ -72,8 +70,6 @@ class UpdateManager {
   }
 
   static void _showUpdateDialog(BuildContext context, String version, String url, String notes) {
-    final loc = AppLocalizations.of;
-    
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -142,7 +138,6 @@ class _UpdateDialogState extends State<_UpdateDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final loc = AppLocalizations.of;
     final isArabic = Provider.of<LocaleProvider>(context, listen: false).locale.languageCode == 'ar';
 
     return AlertDialog(
@@ -180,5 +175,3 @@ class _UpdateDialogState extends State<_UpdateDialog> {
     );
   }
 }
-import '../providers/locale_provider.dart';
-import 'package:provider/provider.dart';
