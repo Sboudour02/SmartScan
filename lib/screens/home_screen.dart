@@ -9,7 +9,6 @@ import 'barcode_generator_screen.dart';
 import 'scanner_screen.dart';
 import 'history_screen.dart';
 import 'batch_generator_screen.dart';
-import '../utils/update_manager.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -27,7 +26,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _runSecurityChecks();
-      UpdateManager.checkAndPromptUpdate(context);
     });
   }
 
