@@ -36,10 +36,13 @@ jobs:
       - name: Setup Shorebird
         uses: shorebirdtech/setup-shorebird@v1
 
-      - name: Build Shorebird Release (APK)
-        run: shorebird release android --artifact apk
-        env:
-          SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
+      - name: Build APK (Normal)
+        run: flutter build apk --release --target-platform android-arm64 --split-per-abi
+
+      # - name: Build Shorebird Release (APK)
+      #   run: shorebird release android --artifact apk
+      #   env:
+      #     SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
 
       - name: Rename APK
         run: |
