@@ -9,7 +9,8 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:barcode_widget/barcode_widget.dart';
 
 class HistoryScreen extends StatefulWidget {
-  const HistoryScreen({super.key});
+  final int refreshKey;
+  const HistoryScreen({super.key, this.refreshKey = 0});
 
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
@@ -17,6 +18,7 @@ class HistoryScreen extends StatefulWidget {
 
 class _HistoryScreenState extends State<HistoryScreen> {
   List<HistoryItem> _history = [];
+  final Set<String> _selectedIds = {};
   bool _isLoading = true;
 
   @override
@@ -27,14 +29,43 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   Future<void> _loadHistory() async {
     final history = await HistoryManager.getHistory();
-    setState(() {
-      _history = history;
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _history = history;
+        _selectedIds.retainWhere((id) => history.any((item) => item.id == id));
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant HistoryScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.refreshKey != oldWidget.refreshKey) {
+      _loadHistory();
+    }
   }
 
   Future<void> _clearHistory() async {
     await HistoryManager.clearHistory();
+    _loadHistory();
+  }
+
+  void _toggleSelection(String id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+      } else {
+        _selectedIds.add(id);
+      }
+    });
+  }
+
+  Future<void> _deleteSelected() async {
+    await HistoryManager.deleteSelectedHistory(_selectedIds.toList());
+    setState(() {
+      _selectedIds.clear();
+    });
     _loadHistory();
   }
 
@@ -61,11 +92,28 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          TextButton.icon(
-                            onPressed: _clearHistory,
-                            icon: const Icon(Icons.delete_sweep, color: Colors.redAccent),
-                            label: Text('Clear', style: const TextStyle(color: Colors.redAccent)),
-                          )
+                          if (_selectedIds.isNotEmpty) ...[
+                            TextButton.icon(
+                              onPressed: () {
+                                setState(() {
+                                  _selectedIds.clear();
+                                });
+                              },
+                              icon: const Icon(Icons.close),
+                              label: Text(loc(context, 'clear')),
+                            ),
+                            TextButton.icon(
+                              onPressed: _deleteSelected,
+                              icon: const Icon(Icons.delete, color: Colors.redAccent),
+                              label: Text('${loc(context, 'delete_selected')} (${_selectedIds.length})', style: const TextStyle(color: Colors.redAccent)),
+                            )
+                          ] else ...[
+                            TextButton.icon(
+                              onPressed: _clearHistory,
+                              icon: const Icon(Icons.delete_sweep, color: Colors.redAccent),
+                              label: Text(loc(context, 'clear'), style: const TextStyle(color: Colors.redAccent)),
+                            )
+                          ],
                         ],
                       ),
                     ),
@@ -74,17 +122,35 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         itemCount: _history.length,
                         itemBuilder: (context, index) {
                           final item = _history[index];
+                          final isSelected = _selectedIds.contains(item.id);
                           return Card(
                             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            color: isSelected 
+                                ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3)
+                                : null,
                             child: ListTile(
-                              onTap: () => _showHistoryItemDialog(context, item),
-                              leading: CircleAvatar(
-                                backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                                child: Icon(
-                                  item.type == 'QR' ? Icons.qr_code_2 : Icons.view_column,
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
-                              ),
+                              onTap: () {
+                                if (_selectedIds.isNotEmpty) {
+                                  _toggleSelection(item.id);
+                                } else {
+                                  _showHistoryItemDialog(context, item);
+                                }
+                              },
+                              onLongPress: () {
+                                _toggleSelection(item.id);
+                              },
+                              leading: _selectedIds.isNotEmpty
+                                  ? Checkbox(
+                                      value: isSelected,
+                                      onChanged: (val) => _toggleSelection(item.id),
+                                    )
+                                  : CircleAvatar(
+                                      backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                                      child: Icon(
+                                        item.type == 'QR' ? Icons.qr_code_2 : Icons.view_column,
+                                        color: Theme.of(context).colorScheme.primary,
+                                      ),
+                                    ),
                               title: Text(item.content, maxLines: 1, overflow: TextOverflow.ellipsis),
                               subtitle: Text('${item.type} ${item.format != null ? "(${item.format})" : ""}'),
                               trailing: Text(
@@ -123,8 +189,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
     showDialog(
       context: context,
       builder: (context) {
+        final loc = AppLocalizations.of;
         return AlertDialog(
-          title: Text(item.type == 'QR' ? 'QR Code' : 'Barcode'),
+          title: Text(item.type == 'QR' ? loc(context, 'qr_code') : loc(context, 'barcode_label')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -154,19 +221,24 @@ class _HistoryScreenState extends State<HistoryScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
+              child: Text(loc(context, 'close')),
             ),
             ElevatedButton.icon(
               onPressed: () {
-                Navigator.pop(context);
+                // Use the outer context and keep dialog open while exporting
+                final outerContext = this.context;
                 ExportHelper.showExportDialog(
-                  context: context,
+                  context: outerContext,
                   boundaryKey: boundaryKey,
                   fileName: 'history_${item.type.toLowerCase()}',
-                );
+                ).then((_) {
+                  if (context.mounted && Navigator.canPop(context)) {
+                    Navigator.pop(context);
+                  }
+                });
               },
               icon: const Icon(Icons.download),
-              label: const Text('Export'),
+              label: Text(loc(context, 'export')),
             ),
           ],
         );

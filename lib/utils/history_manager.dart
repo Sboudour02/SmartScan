@@ -25,19 +25,25 @@ class HistoryItem {
   };
 
   factory HistoryItem.fromJson(Map<String, dynamic> json) => HistoryItem(
-    id: json['id'],
-    type: json['type'],
-    content: json['content'],
-    format: json['format'],
-    timestamp: DateTime.parse(json['timestamp']),
+    id: json['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
+    type: json['type']?.toString() ?? 'QR',
+    content: json['content']?.toString() ?? '',
+    format: json['format']?.toString(),
+    timestamp: DateTime.tryParse(json['timestamp']?.toString() ?? '') ?? DateTime.now(),
   );
 }
 
 class HistoryManager {
   static const String _key = 'smartscan_history';
+  static SharedPreferences? _prefs;
+
+  static Future<SharedPreferences> get _instance async {
+    _prefs ??= await SharedPreferences.getInstance();
+    return _prefs!;
+  }
 
   static Future<List<HistoryItem>> getHistory() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _instance;
     final String? data = prefs.getString(_key);
     if (data == null) return [];
     
@@ -46,7 +52,6 @@ class HistoryManager {
   }
 
   static Future<void> addHistory(HistoryItem item) async {
-    final prefs = await SharedPreferences.getInstance();
     List<HistoryItem> history = await getHistory();
     
     // Add to top
@@ -57,18 +62,28 @@ class HistoryManager {
       history = history.sublist(0, 10);
     }
 
+    final prefs = await _instance;
+
     await prefs.setString(_key, jsonEncode(history.map((e) => e.toJson()).toList()));
   }
 
   static Future<void> clearHistory() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _instance;
     await prefs.remove(_key);
   }
 
   static Future<void> deleteHistory(String id) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _instance;
     List<HistoryItem> history = await getHistory();
     history.removeWhere((item) => item.id == id);
+    await prefs.setString(_key, jsonEncode(history.map((e) => e.toJson()).toList()));
+  }
+
+  static Future<void> deleteSelectedHistory(List<String> ids) async {
+    if (ids.isEmpty) return;
+    final prefs = await _instance;
+    List<HistoryItem> history = await getHistory();
+    history.removeWhere((item) => ids.contains(item.id));
     await prefs.setString(_key, jsonEncode(history.map((e) => e.toJson()).toList()));
   }
 }

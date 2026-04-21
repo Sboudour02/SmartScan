@@ -32,4 +32,4 @@ jobs:
       - name: Publish Shorebird Patch
         run: shorebird patch android
         env:
-          SHOREBIRD_TOKEN: sb_api_ElTB6fTessQCWU0YPX_HAX1AGktByIqC4l8dZPhEnx0
+          SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}

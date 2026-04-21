@@ -28,7 +28,8 @@ class _CustomBarcodeOverlayState extends State<CustomBarcodeOverlay>
   DeviceOrientation? _lastOrientation;
   int _orientationResetKey = 0;
 
-  List<Offset>? _smoothedCorners;
+  // Use a map instead of a single list to track multiple barcodes and prevent jitter
+  final Map<String, List<Offset>> _smoothedCornersMap = {};
 
   @override
   void initState() {
@@ -81,7 +82,7 @@ class _CustomBarcodeOverlayState extends State<CustomBarcodeOverlay>
       case BarcodeFormat.code39:
       case BarcodeFormat.code93:
       case BarcodeFormat.code128:
-      case BarcodeFormat.itf:
+      case BarcodeFormat.itf14:
         final corners = barcode.corners;
         final d1 = (corners[0] - corners[1]).distance;
         final d2 = (corners[1] - corners[2]).distance;
@@ -134,19 +135,25 @@ class _CustomBarcodeOverlayState extends State<CustomBarcodeOverlay>
                       animation: _animationController,
                       builder: (context, child) {
                         final targetCorners = barcode.corners;
-                        
-                        if (_smoothedCorners == null || _smoothedCorners!.length != targetCorners.length) {
-                          _smoothedCorners = List.from(targetCorners);
+                        final key = barcode.rawValue ?? barcode.corners.toString();
+                        if (!_smoothedCornersMap.containsKey(key) || _smoothedCornersMap[key]!.length != targetCorners.length) {
+                          _smoothedCornersMap[key] = List.from(targetCorners);
                         } else {
                           for (int i = 0; i < targetCorners.length; i++) {
                             // Exponential smoothing for bounding box tracking (removes jitter)
-                            _smoothedCorners![i] = Offset.lerp(_smoothedCorners![i], targetCorners[i], 0.3)!;
+                            _smoothedCornersMap[key]![i] = Offset.lerp(_smoothedCornersMap[key]![i], targetCorners[i], 0.3)!;
                           }
                         }
 
+                        // Clean up stale entries: keep only currently visible barcodes
+                        final activeKeys = barcodeCapture.barcodes
+                            .map((b) => b.rawValue ?? b.corners.toString())
+                            .toSet();
+                        _smoothedCornersMap.removeWhere((k, _) => !activeKeys.contains(k));
+
                         return CustomPaint(
                           painter: _CustomBarcodePainter(
-                            barcodeCorners: _smoothedCorners!,
+                            barcodeCorners: _smoothedCornersMap[key]!,
                             barcodeFormat: barcode.format.name,
                             boxFit: widget.boxFit,
                             cameraPreviewSize: barcodeCapture.size,

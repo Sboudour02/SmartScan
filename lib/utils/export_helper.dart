@@ -9,8 +9,34 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:file_saver/file_saver.dart';
 import 'dart:convert';
 import 'package:qr/qr.dart';
+import '../utils/localization.dart';
 
 class ExportHelper {
+  /// Cleans up old temporary export files to prevent storage bloat
+  static Future<void> _cleanupTempFiles() async {
+    try {
+      final directory = await getTemporaryDirectory();
+      final files = directory.listSync();
+      final expiration = DateTime.now().subtract(const Duration(hours: 1));
+      
+      for (var file in files) {
+        if (file is File) {
+          final stat = file.statSync();
+          if (stat.modified.isBefore(expiration)) {
+            final filename = file.uri.pathSegments.last.toLowerCase();
+            if (filename.endsWith('.png') || filename.endsWith('.pdf') || filename.endsWith('.svg') || filename.endsWith('.jpeg')) {
+              try {
+                file.deleteSync();
+              } catch (_) {}
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error cleaning temp files: $e');
+    }
+  }
+
   static Future<void> showExportDialog({
     required BuildContext context,
     required GlobalKey boundaryKey,
@@ -20,17 +46,18 @@ class ExportHelper {
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) {
+        final loc = AppLocalizations.of;
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Choose Export Format', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                Text(loc(context, 'choose_format'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 16),
                 ListTile(
                   leading: const Icon(Icons.image, color: Colors.blue),
-                  title: const Text('Export as PNG'),
+                  title: Text(loc(context, 'export_as_png')),
                   onTap: () {
                     Navigator.pop(context);
                     exportBoundary(context: context, key: boundaryKey, fileName: fileName, ext: 'png', isShare: true);
@@ -38,7 +65,7 @@ class ExportHelper {
                 ),
                 ListTile(
                   leading: const Icon(Icons.picture_as_pdf, color: Colors.blueAccent),
-                  title: const Text('Export as PDF (Share)'),
+                  title: Text(loc(context, 'export_as_pdf')),
                   onTap: () {
                     Navigator.pop(context);
                     exportPDF(context: context, key: boundaryKey, fileName: fileName, isShare: true);
@@ -46,7 +73,7 @@ class ExportHelper {
                 ),
                 ListTile(
                   leading: const Icon(Icons.save_alt, color: Colors.green),
-                  title: const Text('Save Local (PNG)'),
+                  title: Text(loc(context, 'save_local_png')),
                   onTap: () {
                     Navigator.pop(context);
                     exportBoundary(context: context, key: boundaryKey, fileName: fileName, ext: 'png', isShare: false);
@@ -54,7 +81,7 @@ class ExportHelper {
                 ),
                 ListTile(
                   leading: const Icon(Icons.picture_as_pdf, color: Colors.green),
-                  title: const Text('Save Local (PDF)'),
+                  title: Text(loc(context, 'save_local_pdf')),
                   onTap: () {
                     Navigator.pop(context);
                     exportPDF(context: context, key: boundaryKey, fileName: fileName, isShare: false);
@@ -75,6 +102,7 @@ class ExportHelper {
     required String ext,
     required bool isShare,
   }) async {
+    _cleanupTempFiles(); // Fire and forget
     try {
       RenderRepaintBoundary boundary = key.currentContext!.findRenderObject() as RenderRepaintBoundary;
       ui.Image image = await boundary.toImage(pixelRatio: 3.0);
@@ -83,7 +111,7 @@ class ExportHelper {
 
       // For JPEG, we still capture as PNG (Flutter limitation) but save with .jpeg extension
       final String actualExt = ext.toLowerCase() == 'jpeg' ? 'jpeg' : ext;
-      final MimeType mimeType = actualExt == 'jpeg' ? MimeType.custom : MimeType.png;
+      final MimeType mimeType = actualExt == 'jpeg' ? MimeType.jpeg : MimeType.png;
 
       if (isShare) {
         final directory = await getTemporaryDirectory();
@@ -126,6 +154,7 @@ class ExportHelper {
     required String fileName,
     required bool isShare,
   }) async {
+    _cleanupTempFiles(); // Fire and forget
     try {
       RenderRepaintBoundary boundary = key.currentContext!.findRenderObject() as RenderRepaintBoundary;
       ui.Image image = await boundary.toImage(pixelRatio: 3.0);
@@ -186,6 +215,7 @@ class ExportHelper {
     required String qrData,
     required String fileName,
   }) async {
+    _cleanupTempFiles(); // Fire and forget
     try {
       // Generate a simple SVG QR code representation
       final svgContent = _generateQrSvg(qrData);

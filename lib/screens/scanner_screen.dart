@@ -1,9 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:provider/provider.dart';
+import 'package:path_provider/path_provider.dart';
 import '../utils/history_manager.dart';
 import '../utils/localization.dart';
 import '../utils/security_helper.dart';
@@ -12,7 +14,8 @@ import '../widgets/custom_barcode_overlay.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ScannerScreen extends StatefulWidget {
-  const ScannerScreen({super.key});
+  final bool isActive;
+  const ScannerScreen({super.key, this.isActive = true});
 
   @override
   State<ScannerScreen> createState() => _ScannerScreenState();
@@ -25,7 +28,6 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
   );
 
   String? _barcodeValue;
-  String? _barcodeType;
   bool _isProcessing = false;
 
   // Anti-False-Positive Local State
@@ -50,8 +52,56 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
            _schemeRegex.hasMatch(_barcodeValue!);
   }
 
-  String _getDomainPreview(String url) {
+  bool get _isWifi => _barcodeValue?.toUpperCase().startsWith('WIFI:') ?? false;
+  bool get _isVCard => _barcodeValue != null && (_barcodeValue!.toUpperCase().startsWith('BEGIN:VCARD') || _barcodeValue!.toUpperCase().startsWith('MECARD:'));
+
+  String? _getWifiPassword() {
+    if (_barcodeValue == null) return null;
+    final match = RegExp(r'P:(.*?)(;|$)').firstMatch(_barcodeValue!);
+    return match?.group(1);
+  }
+
+  void _copyWifiPassword() {
+    final pass = _getWifiPassword();
+    if (pass != null && pass.isNotEmpty) {
+      Clipboard.setData(ClipboardData(text: pass));
+      final loc = AppLocalizations.of;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(loc(context, 'copy_password'))),
+      );
+    }
+  }
+
+  Future<void> _shareVCard() async {
+    if (_barcodeValue == null) return;
     try {
+      final tempDir = await getTemporaryDirectory();
+      final tempFile = File('${tempDir.path}/contact.vcf');
+      await tempFile.writeAsString(_barcodeValue!);
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [
+            XFile(tempFile.path, mimeType: 'text/vcard')
+          ],
+          text: 'Contact',
+        ),
+      );
+    } catch (e) {
+      _shareResult(); // fallback
+    }
+  }
+
+  String _getPreview(String url) {
+    try {
+      if (_isWifi) {
+        final match = RegExp(r'S:(.*?)(;|$)').firstMatch(url);
+        return match != null ? 'WiFi: ${match.group(1)}' : 'WiFi Network';
+      }
+      if (_isVCard) {
+        final nameMatch = RegExp(r'(?:FN:|N:)(.*?)(?:\r?\n|;|$)').firstMatch(url);
+        return nameMatch != null ? 'Contact: ${nameMatch.group(1)?.replaceAll(';', ' ')}' : 'Contact Card';
+      }
+
       String tempUrl = url.trim();
       
       final lowerUrl = tempUrl.toLowerCase();
@@ -75,7 +125,8 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
     if (_barcodeValue == null) return;
     String url = _barcodeValue!.trim();
     
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    // Don't prepend https:// if a known scheme is already present
+    if (!_hasSchemeRegex.hasMatch(url)) {
       url = 'https://$url';
     }
     
@@ -116,6 +167,20 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
   }
 
   @override
+  void didUpdateWidget(covariant ScannerScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive != oldWidget.isActive) {
+      if (widget.isActive) {
+        _scannerController.start();
+      } else {
+        _scannerController.stop();
+        // Clean up stale detection counts when leaving scanner
+        _barcodeDetectionCounts.clear();
+      }
+    }
+  }
+
+  @override
   void dispose() {
     _animationController.dispose();
     _scannerController.dispose();
@@ -139,7 +204,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
       case BarcodeFormat.code39:
       case BarcodeFormat.code93:
       case BarcodeFormat.code128:
-      case BarcodeFormat.itf:
+      case BarcodeFormat.itf14:
         // These can have variable lengths, but checking if they are somewhat reasonable 
         // helps avoid short noise (like 1 or 2 characters)
         return value.length >= 3;
@@ -215,7 +280,6 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
 
       setState(() {
         _barcodeValue = safeValue;
-        _barcodeType = barcode.format.name;
       });
 
       // Save to History
@@ -244,11 +308,12 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
       final BarcodeCapture? capture = await _scannerController.analyzeImage(xFile.path);
       
       if (capture != null && capture.barcodes.isNotEmpty) {
-        _handleBarcode(capture.barcodes.first);
+        await _handleBarcode(capture.barcodes.first);
       } else {
         if (mounted) {
+          final loc = AppLocalizations.of;
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No QR/Barcode found in image.')),
+            SnackBar(content: Text(loc(context, 'no_qr_found'))),
           );
         }
       }
@@ -258,8 +323,9 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
   void _copyToClipboard() {
     if (_barcodeValue != null) {
       Clipboard.setData(ClipboardData(text: _barcodeValue!));
+      final loc = AppLocalizations.of;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Copied to clipboard')),
+        SnackBar(content: Text(loc(context, 'copied'))),
       );
     }
   }
@@ -382,7 +448,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
               ),
               IconButton(
                 icon: const Icon(Icons.cameraswitch_rounded, color: Colors.white, size: 32),
-                tooltip: 'Switch Camera',
+                tooltip: loc(context, 'switch_camera'),
                 onPressed: () => _scannerController.switchCamera(),
               ),
             ],
@@ -433,7 +499,6 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                             onTap: () {
                               setState(() {
                                 _barcodeValue = null;
-                                _barcodeType = null;
                                 _isProcessing = false; // Reset the processing flag to immediately allow new scans
                               });
                             },
@@ -451,7 +516,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      _isUrl ? _getDomainPreview(_barcodeValue!) : _barcodeValue!,
+                      _isUrl ? _getPreview(_barcodeValue!) : _barcodeValue!,
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                         fontSize: _isUrl ? 22 : 18,
                         fontWeight: _isUrl ? FontWeight.bold : FontWeight.normal,
@@ -481,7 +546,27 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                           ElevatedButton.icon(
                             onPressed: _openUrl,
                             icon: const Icon(Icons.open_in_browser),
-                            label: const Text('Open'),
+                            label: Text(loc(context, 'open')),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Theme.of(context).colorScheme.primary,
+                              foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                            ),
+                          ),
+                        if (_isWifi)
+                          ElevatedButton.icon(
+                            onPressed: _copyWifiPassword,
+                            icon: const Icon(Icons.password),
+                            label: Text(loc(context, 'copy_password')),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Theme.of(context).colorScheme.primary,
+                              foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                            ),
+                          ),
+                        if (_isVCard)
+                          ElevatedButton.icon(
+                            onPressed: _shareVCard,
+                            icon: const Icon(Icons.person_add),
+                            label: Text(loc(context, 'add_contact')),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Theme.of(context).colorScheme.primary,
                               foregroundColor: Theme.of(context).colorScheme.onPrimary,

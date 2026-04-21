@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'dart:typed_data';
+
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
@@ -10,7 +10,14 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:barcode_widget/barcode_widget.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:flutter/foundation.dart';
 import '../utils/localization.dart';
+
+Uint8List? _encodeZip(Archive archive) {
+  final zipData = ZipEncoder().encode(archive);
+  if (zipData == null) return null;
+  return Uint8List.fromList(zipData);
+}
 
 class BatchGeneratorScreen extends StatefulWidget {
   const BatchGeneratorScreen({super.key});
@@ -82,7 +89,7 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
       if (data.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No valid data found in the file.')),
+            SnackBar(content: Text(AppLocalizations.of(context, 'no_valid_data'))),
           );
         }
         return;
@@ -190,11 +197,9 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
 
       setState(() => _statusMessage = 'Creating ZIP file...');
 
-      // Encode the ZIP
-      final zipData = ZipEncoder().encode(archive);
-      if (zipData == null) throw Exception('Failed to create ZIP file');
-
-      final zipBytes = Uint8List.fromList(zipData);
+      // Encode the ZIP in background to avoid UI freeze
+      final zipBytes = await compute(_encodeZip, archive);
+      if (zipBytes == null) throw Exception('Failed to create ZIP file');
 
       // Save to temp and share
       final directory = await getTemporaryDirectory();
@@ -365,9 +370,22 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text(
-                        'Upload a CSV or Excel file. The first column generates the codes, exported as a ZIP.',
-                        style: Theme.of(context).textTheme.bodyMedium,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            loc(context, 'batch_instructions'),
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            loc(context, 'batch_column_note'),
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -410,7 +428,7 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Please ensure your CSV/Excel file contains valid numbers in the first column for $_selectedFormat.',
+                        '${loc(context, 'numeric_warning')} $_selectedFormat.',
                         style: const TextStyle(color: Colors.orange, fontSize: 13, fontWeight: FontWeight.bold),
                       ),
                     ),

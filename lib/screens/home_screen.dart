@@ -19,6 +19,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+  int _historyRefreshKey = 0;
 
   @override
   void initState() {
@@ -43,8 +44,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final tabs = [
       const QrGeneratorScreen(), // QR Generator Screen
       const BarcodeGeneratorScreen(), // Barcode Generator Screen
-      const ScannerScreen(), // Scanner Screen
-      const HistoryScreen(), // History Screen
+      ScannerScreen(isActive: _currentIndex == 2), // Scanner Screen
+      HistoryScreen(refreshKey: _historyRefreshKey), // History Screen
       _buildSettingsTab(context),
     ];
 
@@ -53,10 +54,12 @@ class _HomeScreenState extends State<HomeScreen> {
         title: Text(loc(context, 'app_name')),
         centerTitle: true,
         elevation: 2,
-        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
       ),
       body: SafeArea(
-        child: tabs[_currentIndex],
+        child: IndexedStack(
+          index: _currentIndex,
+          children: tabs,
+        ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
@@ -64,6 +67,7 @@ class _HomeScreenState extends State<HomeScreen> {
         onDestinationSelected: (idx) {
           setState(() {
             _currentIndex = idx;
+            if (idx == 3) _historyRefreshKey++;
           });
         },
         destinations: [
@@ -131,7 +135,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ListTile(
           leading: const Icon(Icons.batch_prediction),
           title: Text(loc(context, 'batch_generation')),
-          subtitle: const Text('CSV/Excel Support'),
+          subtitle: Text(loc(context, 'csv_support')),
           trailing: const Icon(Icons.chevron_right),
           onTap: () {
             Navigator.push(context, MaterialPageRoute(builder: (_) => const BatchGeneratorScreen()));

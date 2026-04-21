@@ -11,7 +11,7 @@ class LocaleProvider extends ChangeNotifier {
     _loadLocale();
   }
 
-  void setLocale(Locale tempLocale) async {
+  Future<void> setLocale(Locale tempLocale) async {
     if (!['en', 'ar', 'fr'].contains(tempLocale.languageCode)) return;
     _locale = tempLocale;
     notifyListeners();
@@ -19,7 +19,7 @@ class LocaleProvider extends ChangeNotifier {
     await prefs.setString(_key, tempLocale.languageCode);
   }
 
-  void _loadLocale() async {
+  Future<void> _loadLocale() async {
     final prefs = await SharedPreferences.getInstance();
     final String? langCode = prefs.getString(_key);
     if (langCode != null && ['en', 'ar', 'fr'].contains(langCode)) {

@@ -39,7 +39,7 @@ jobs:
       - name: Build Shorebird Release (APK)
         run: shorebird release android --artifact apk
         env:
-          SHOREBIRD_TOKEN: sb_api_ElTB6fTessQCWU0YPX_HAX1AGktByIqC4l8dZPhEnx0
+          SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
 
       - name: Rename APK
         run: |

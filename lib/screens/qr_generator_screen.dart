@@ -59,8 +59,21 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
     'SMS',
     'Event',
     'Crypto',
-    'Free Input',
   ];
+
+  @override
+  void dispose() {
+    for (var c in [
+      _dataController, _wifiSsidController, _wifiPassController,
+      _contactNameController, _contactPhoneController, _contactEmailController,
+      _locLatController, _locLngController, _eventTitleController,
+      _cryptoAddressController, _cryptoAmountController,
+      _subjectController, _messageController
+    ]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
 
   void _clearAllControllers() {
     for (var c in [
@@ -466,7 +479,7 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
                   
                   // Shape Selection
                   Text(
-                    'Eye Shape',
+                    loc(context, 'eye_shape'),
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
@@ -474,13 +487,13 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
                     spacing: 8,
                     children: [
                       ChoiceChip(
-                        label: const Text('Square Eyes'),
+                        label: Text(loc(context, 'square_eyes')),
                         selected: !_isRoundEye,
                         onSelected: (val) => setState(() => _isRoundEye = !val),
                         selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
                       ),
                       ChoiceChip(
-                        label: const Text('Round Eyes'),
+                        label: Text(loc(context, 'round_eyes')),
                         selected: _isRoundEye,
                         onSelected: (val) => setState(() => _isRoundEye = val),
                         selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
@@ -491,7 +504,7 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
 
                   // QR Code Size
                   Text(
-                    'QR Code Size',
+                    loc(context, 'qr_size'),
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
@@ -526,7 +539,7 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
 
                   // Download Format
                   Text(
-                    'Download Format',
+                    loc(context, 'download_format'),
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
