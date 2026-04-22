@@ -8,7 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import '../utils/history_manager.dart';
 import '../utils/localization.dart';
-import '../utils/security_helper.dart';
+import '../utils/content_parser.dart';
 import '../providers/locale_provider.dart';
 import '../widgets/custom_barcode_overlay.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -36,21 +36,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
 
   late AnimationController _animationController;
 
-  static final _urlRegex = RegExp(
-      r'^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$',
-      caseSensitive: false);
-  static final _deepLinkRegex = RegExp(
-      r'^(wa\.me|t\.me|instagram\.com|twitter\.com|x\.com|facebook\.com)\/.*$',
-      caseSensitive: false);
-  static final _schemeRegex = RegExp(r'^(mailto|tel|sms|geo):', caseSensitive: false);
-  static final _hasSchemeRegex = RegExp(r'^([a-zA-Z][a-zA-Z0-9\+\-\.]*:)', caseSensitive: false);
-
-  bool get _isUrl {
-    if (_barcodeValue == null) return false;
-    return _urlRegex.hasMatch(_barcodeValue!) || 
-           _deepLinkRegex.hasMatch(_barcodeValue!) ||
-           _schemeRegex.hasMatch(_barcodeValue!);
-  }
+  late AnimationController _animationController;
 
   bool get _isWifi => _barcodeValue?.toUpperCase().startsWith('WIFI:') ?? false;
   bool get _isVCard => _barcodeValue != null && (_barcodeValue!.toUpperCase().startsWith('BEGIN:VCARD') || _barcodeValue!.toUpperCase().startsWith('MECARD:'));
@@ -110,7 +96,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
       if (lowerUrl.startsWith('sms:')) return tempUrl.substring(4);
       if (lowerUrl.startsWith('geo:')) return 'Location';
 
-      if (!_hasSchemeRegex.hasMatch(tempUrl)) {
+      if (!ContentParser.hasScheme(tempUrl)) {
         tempUrl = 'https://$tempUrl';
       }
       final uri = Uri.parse(tempUrl);
@@ -126,7 +112,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
     String url = _barcodeValue!.trim();
     
     // Don't prepend https:// if a known scheme is already present
-    if (!_hasSchemeRegex.hasMatch(url)) {
+    if (!ContentParser.hasScheme(url)) {
       url = 'https://$url';
     }
     
@@ -353,7 +339,9 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
         
         // Only show the dynamic yellow bounding box overlay when actively scanning/showing result
         if (_isProcessing || _barcodeValue != null)
-          CustomBarcodeOverlay(controller: _scannerController),
+          RepaintBoundary(
+            child: CustomBarcodeOverlay(controller: _scannerController),
+          ),
 
         // Static Overlay & Scanning Animation Line
         StreamBuilder<BarcodeCapture>(
@@ -364,7 +352,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
             final shouldHideStaticOverlay = _isProcessing || _barcodeValue != null;
 
             if (shouldHideStaticOverlay) {
-              return const SizedBox(); // Hide static overlay to focus on the yellow bounding box
+              return const SizedBox.shrink(); // Hide static overlay to focus on the yellow bounding box
             }
 
             return Stack(
@@ -478,7 +466,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                     Row(
                       children: [
                         Icon(
-                          _isUrl ? Icons.language : Icons.qr_code_scanner, 
+                          _isUrl ? Icons.language : Icons.qr_code_scanner,
                           color: Theme.of(context).colorScheme.primary
                         ),
                         const SizedBox(width: 8),
@@ -515,25 +503,33 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Text(
-                      _isUrl ? _getPreview(_barcodeValue!) : _barcodeValue!,
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        fontSize: _isUrl ? 22 : 18,
-                        fontWeight: _isUrl ? FontWeight.bold : FontWeight.normal,
+                    SizedBox(
+                      maxHeight: 80,
+                      child: SingleChildScrollView(
+                        child: Text(
+                          _isUrl ? _getPreview(_barcodeValue!) : _barcodeValue!,
+                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            fontSize: _isUrl ? 22 : 18,
+                            fontWeight: _isUrl ? FontWeight.bold : FontWeight.normal,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
-                      textAlign: TextAlign.center,
                     ),
                     if (_isUrl)
                       Padding(
                         padding: const EdgeInsets.only(top: 8.0),
-                        child: Text(
-                          _barcodeValue!,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        child: SizedBox(
+                          maxHeight: 60,
+                          child: SingleChildScrollView(
+                            child: Text(
+                              _barcodeValue!,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
                         ),
                       ),
                     const SizedBox(height: 24),

@@ -232,6 +232,7 @@ class _BarcodeGeneratorScreenState extends State<BarcodeGeneratorScreen> {
                       padding: const EdgeInsets.only(right: 8.0),
                       child: ChoiceChip(
                         label: Text(type['name']),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         selected: isSelected,
                         onSelected: (selected) {
                           if (selected) _onTypeChanged(type);

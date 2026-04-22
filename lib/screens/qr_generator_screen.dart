@@ -287,6 +287,7 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
                       padding: const EdgeInsets.only(right: 8.0),
                       child: ChoiceChip(
                         label: Text(t),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         selected: isSelected,
                         onSelected: (selected) {
                           if (selected) {
@@ -488,12 +489,14 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
                     children: [
                       ChoiceChip(
                         label: Text(loc(context, 'square_eyes')),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         selected: !_isRoundEye,
                         onSelected: (val) => setState(() => _isRoundEye = !val),
                         selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
                       ),
                       ChoiceChip(
                         label: Text(loc(context, 'round_eyes')),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         selected: _isRoundEye,
                         onSelected: (val) => setState(() => _isRoundEye = val),
                         selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
@@ -527,6 +530,7 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
                             Text(size),
                           ],
                         ),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         selected: isSelected,
                         onSelected: (val) {
                           if (val) setState(() => _selectedSize = size);
@@ -549,6 +553,7 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
                       final isSelected = _selectedFormat == format;
                       return ChoiceChip(
                         label: Text(format),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         selected: isSelected,
                         onSelected: (val) {
                           if (val) setState(() => _selectedFormat = format);

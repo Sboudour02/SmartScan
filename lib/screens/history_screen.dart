@@ -47,8 +47,34 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Future<void> _clearHistory() async {
-    await HistoryManager.clearHistory();
-    _loadHistory();
+    final loc = AppLocalizations.of;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(loc(context, 'clear_history_title')),
+        content: Text(loc(context, 'clear_history_msg')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(loc(context, 'cancel')),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            child: Text(
+              loc(context, 'confirm'),
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await HistoryManager.clearHistory();
+      _loadHistory();
+    }
   }
 
   void _toggleSelection(String id) {
@@ -104,14 +130,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             ),
                             TextButton.icon(
                               onPressed: _deleteSelected,
-                              icon: const Icon(Icons.delete, color: Colors.redAccent),
-                              label: Text('${loc(context, 'delete_selected')} (${_selectedIds.length})', style: const TextStyle(color: Colors.redAccent)),
+                              icon: Icon(Icons.delete, color: Theme.of(context).colorScheme.error),
+                              label: Text('${loc(context, 'delete_selected')} (${_selectedIds.length})', style: TextStyle(color: Theme.of(context).colorScheme.error)),
                             )
                           ] else ...[
                             TextButton.icon(
                               onPressed: _clearHistory,
-                              icon: const Icon(Icons.delete_sweep, color: Colors.redAccent),
-                              label: Text(loc(context, 'clear'), style: const TextStyle(color: Colors.redAccent)),
+                              icon: Icon(Icons.delete_sweep, color: Theme.of(context).colorScheme.error),
+                              label: Text(loc(context, 'clear'), style: TextStyle(color: Theme.of(context).colorScheme.error)),
                             )
                           ],
                         ],
@@ -125,7 +151,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           final isSelected = _selectedIds.contains(item.id);
                           return Card(
                             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            color: isSelected 
+                            color: isSelected
                                 ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3)
                                 : null,
                             child: ListTile(
@@ -185,7 +211,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     if (!context.mounted) return;
 
     final GlobalKey boundaryKey = GlobalKey();
-    
+
     showDialog(
       context: context,
       builder: (context) {
@@ -215,7 +241,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              SelectableText(item.content, textAlign: TextAlign.center),
+              SizedBox(
+                maxHeight: 100,
+                child: SingleChildScrollView(
+                  child: SelectableText(item.content, textAlign: TextAlign.center),
+                ),
+              ),
             ],
           ),
           actions: [
@@ -225,7 +256,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ),
             ElevatedButton.icon(
               onPressed: () {
-                // Use the outer context and keep dialog open while exporting
                 final outerContext = this.context;
                 ExportHelper.showExportDialog(
                   context: outerContext,
@@ -283,7 +313,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       case 'PDF417': return Barcode.pdf417();
       case 'BarcodeType.Code128':
       case 'CODE_128':
-      case 'Code 128': 
+      case 'Code 128':
       default: return Barcode.code128();
     }
   }

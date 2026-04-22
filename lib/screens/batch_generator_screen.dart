@@ -5,19 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:csv/csv.dart';
 import 'package:excel/excel.dart';
-import 'package:archive/archive.dart';
+import 'package:async_zip/async_zip.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:barcode_widget/barcode_widget.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter/foundation.dart';
 import '../utils/localization.dart';
-
-Uint8List? _encodeZip(Archive archive) {
-  final zipData = ZipEncoder().encode(archive);
-  if (zipData == null) return null;
-  return Uint8List.fromList(zipData);
-}
 
 class BatchGeneratorScreen extends StatefulWidget {
   const BatchGeneratorScreen({super.key});
@@ -159,7 +153,11 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
     });
 
     try {
-      final archive = Archive();
+      final directory = await getTemporaryDirectory();
+      final zipPath = '${directory.path}/smartscan_batch_${DateTime.now().millisecondsSinceEpoch}.zip';
+      final zipFile = File(zipPath);
+
+      final writer = ZipFileWriter(zipFile);
       final total = _parsedData.length;
 
       for (int i = 0; i < total; i++) {
@@ -181,7 +179,8 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
             .replaceAll(RegExp(r'\s+'), '_');
         final fileName = '${(i + 1).toString().padLeft(3, '0')}_$safeName.png';
 
-        archive.addFile(ArchiveFile(fileName, pngBytes.length, pngBytes));
+        // Write image to ZIP directly from bytes to avoid excessive temporary files
+        await writer.addFile(fileName, pngBytes);
 
         setState(() {
           _progress = (i + 1) / total;
@@ -195,16 +194,7 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
         }
       }
 
-      setState(() => _statusMessage = 'Creating ZIP file...');
-
-      // Encode the ZIP in background to avoid UI freeze
-      final zipBytes = await compute(_encodeZip, archive);
-      if (zipBytes == null) throw Exception('Failed to create ZIP file');
-
-      // Save to temp and share
-      final directory = await getTemporaryDirectory();
-      final zipFile = File('${directory.path}/smartscan_batch_${DateTime.now().millisecondsSinceEpoch}.zip');
-      await zipFile.writeAsBytes(zipBytes);
+      await writer.close();
 
       setState(() {
         _isProcessing = false;
@@ -215,7 +205,7 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
         final box = context.findRenderObject() as RenderBox?;
         await SharePlus.instance.share(
           ShareParams(
-            files: [XFile(zipFile.path)],
+            files: [XFile(zipPath)],
             text: 'Batch QR Codes ($total items) — SmartScan',
             sharePositionOrigin: box != null ? box.localToGlobal(Offset.zero) & box.size : null,
           ),
@@ -355,43 +345,86 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Instructions Banner
-            Card(
-              elevation: 0,
-              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.info_outline,
-                      size: 28,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            loc(context, 'batch_instructions'),
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            loc(context, 'batch_column_note'),
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                          ),
-                        ],
+            if (_parsedData.isEmpty)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 40.0, horizontal: 24.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.upload_file_rounded,
+                        size: 100,
+                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 24),
+                      Text(
+                        loc(context, 'batch_empty_title'),
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        loc(context, 'batch_empty_msg'),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.grey.shade600,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 32),
+                      ElevatedButton.icon(
+                        onPressed: _pickFile,
+                        icon: const Icon(Icons.file_upload),
+                        label: Text(loc(context, 'batch_upload_cta')),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              Card(
+                elevation: 0,
+                color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 28,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              loc(context, 'batch_instructions'),
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              loc(context, 'batch_column_note'),
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
             const SizedBox(height: 24),
 
             // Select Format
