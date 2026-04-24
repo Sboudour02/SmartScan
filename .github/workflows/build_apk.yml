@@ -28,10 +28,14 @@ jobs:
         run: flutter pub get
 
       - name: Build APK
-        run: flutter build apk --release --verbose 2>&1 | tail -100
+        run: flutter build apk --release
+
+      - name: Find APK
+        run: find . -name '*.apk' | grep -v '.flutter-plugins'
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: release-apk
-          path: build/app/outputs/flutter-apk/*.apk
+          path: '**/*.apk'
+          if-no-files-found: warn
