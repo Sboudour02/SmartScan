@@ -1,11 +1,10 @@
 import 'dart:io';
-
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:csv/csv.dart';
 import 'package:excel/excel.dart';
-import 'package:async_zip/async_zip.dart';
+import 'package:archive/archive.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:barcode_widget/barcode_widget.dart';
 import 'package:path_provider/path_provider.dart';
@@ -77,7 +76,6 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
         data = await _parseExcel(file.path!);
       }
 
-      // Remove empty entries
       data = data.where((s) => s.trim().isNotEmpty).toList();
 
       if (data.isEmpty) {
@@ -124,7 +122,6 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
     final excel = Excel.decodeBytes(bytes);
 
     final List<String> result = [];
-    // Read the first sheet
     final sheetName = excel.tables.keys.first;
     final sheet = excel.tables[sheetName];
 
@@ -155,9 +152,8 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
     try {
       final directory = await getTemporaryDirectory();
       final zipPath = '${directory.path}/smartscan_batch_${DateTime.now().millisecondsSinceEpoch}.zip';
-      final zipFile = File(zipPath);
 
-      final writer = ZipFileWriter(zipFile);
+      final archive = Archive();
       final total = _parsedData.length;
 
       for (int i = 0; i < total; i++) {
@@ -173,14 +169,12 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
           }
         }
 
-        // Sanitize filename: replace invalid chars
         final safeName = data
             .replaceAll(RegExp(r'[^\w\s\-.]'), '_')
             .replaceAll(RegExp(r'\s+'), '_');
         final fileName = '${(i + 1).toString().padLeft(3, '0')}_$safeName.png';
 
-        // Write image to ZIP directly from bytes to avoid excessive temporary files
-        await writer.addFile(fileName, pngBytes);
+        archive.addFile(ArchiveFile(fileName, pngBytes.length, pngBytes));
 
         setState(() {
           _progress = (i + 1) / total;
@@ -188,13 +182,16 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
           _statusMessage = 'Generated $_generatedCount / $total';
         });
 
-        // Small delay to let the UI breathe
         if (i % 5 == 0) {
           await Future.delayed(const Duration(milliseconds: 10));
         }
       }
 
-      await writer.close();
+      final zipFile = File(zipPath);
+      final encodedZip = ZipEncoder().encode(archive);
+      if (encodedZip != null) {
+        await zipFile.writeAsBytes(encodedZip);
+      }
 
       setState(() {
         _isProcessing = false;
@@ -202,13 +199,9 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
       });
 
       if (mounted) {
-        final box = context.findRenderObject() as RenderBox?;
-        await SharePlus.instance.share(
-          ShareParams(
-            files: [XFile(zipPath)],
-            text: 'Batch QR Codes ($total items) — SmartScan',
-            sharePositionOrigin: box != null ? box.localToGlobal(Offset.zero) & box.size : null,
-          ),
+        await Share.shareXFiles(
+          [XFile(zipPath)],
+          text: 'Batch QR Codes ($total items) — SmartScan',
         );
       }
     } catch (e) {
@@ -228,11 +221,10 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
     final imageSize = 512.0;
     final barcodeWidth = 480.0;
     final barcodeHeight = 240.0;
-    
+
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
 
-    // Fill white background
     canvas.drawRect(
       Rect.fromLTWH(0, 0, imageSize, imageSize),
       Paint()..color = const Color(0xFFFFFFFF),
@@ -265,9 +257,9 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
           );
         }
       } else if (element is BarcodeText) {
-        final align = element.align == BarcodeTextAlign.left ? TextAlign.left : 
+        final align = element.align == BarcodeTextAlign.left ? TextAlign.left :
                       element.align == BarcodeTextAlign.right ? TextAlign.right : TextAlign.center;
-        
+
         final builder = ui.ParagraphBuilder(
           ui.ParagraphStyle(
             textAlign: align,
@@ -278,7 +270,7 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
           ..addText(element.text);
         final paragraph = builder.build();
         paragraph.layout(ui.ParagraphConstraints(width: element.width));
-        
+
         canvas.drawParagraph(
           paragraph,
           Offset(dx + element.left, dy + element.top + paragraph.alphabeticBaseline - paragraph.height),
@@ -293,7 +285,6 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
     return byteData!.buffer.asUint8List();
   }
 
-  /// Generate a QR code as a PNG Uint8List using QrPainter
   Future<Uint8List> _generateQrImage(String data) async {
     final qrPainter = QrPainter(
       data: data,
@@ -313,7 +304,6 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
 
-    // Fill white background
     canvas.drawRect(
       Rect.fromLTWH(0, 0, imageSize, imageSize),
       Paint()..color = const Color(0xFFFFFFFF),
@@ -330,10 +320,10 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final loc = AppLocalizations.of;
+    final loc = (String key) => AppLocalizations.of(context, key);
 
     return Scaffold(
-      appBar: AppBar(title: Text(loc(context, 'batch_generation'))),
+      appBar: AppBar(title: Text(loc('batch_generation'))),
       body: SingleChildScrollView(
         padding: EdgeInsets.only(
           top: 24.0,
@@ -344,7 +334,6 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Instructions Banner
             if (_parsedData.isEmpty)
               Center(
                 child: Padding(
@@ -359,7 +348,7 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
                       ),
                       const SizedBox(height: 24),
                       Text(
-                        loc(context, 'batch_empty_title'),
+                        loc('batch_empty_title'),
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -367,7 +356,7 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        loc(context, 'batch_empty_msg'),
+                        loc('batch_empty_msg'),
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Colors.grey.shade600,
                         ),
@@ -377,7 +366,7 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
                       ElevatedButton.icon(
                         onPressed: _pickFile,
                         icon: const Icon(Icons.file_upload),
-                        label: Text(loc(context, 'batch_upload_cta')),
+                        label: Text(loc('batch_upload_cta')),
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -407,12 +396,12 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              loc(context, 'batch_instructions'),
+                              loc('batch_instructions'),
                               style: Theme.of(context).textTheme.bodyMedium,
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              loc(context, 'batch_column_note'),
+                              loc('batch_column_note'),
                               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 fontWeight: FontWeight.bold,
                                 color: Theme.of(context).colorScheme.primary,
@@ -426,8 +415,6 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
                 ),
               ),
             const SizedBox(height: 24),
-
-            // Select Format
             Card(
               elevation: 2,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -436,7 +423,7 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('${loc(context, 'choose_format')}:', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    Text('${loc('choose_format')}:', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                     DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
                         value: _selectedFormat,
@@ -450,8 +437,6 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
                 ),
               ),
             ),
-            
-            // Warning for numeric formats
             if (['EAN-13', 'EAN-8', 'UPC-A', 'UPC-E', 'ITF'].contains(_selectedFormat))
               Padding(
                 padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
@@ -461,22 +446,19 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        '${loc(context, 'numeric_warning')} $_selectedFormat.',
+                        '${loc('numeric_warning')} $_selectedFormat.',
                         style: const TextStyle(color: Colors.orange, fontSize: 13, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ],
                 ),
               ),
-            
             const SizedBox(height: 16),
-
-            // Select File Button
             OutlinedButton.icon(
               onPressed: _isProcessing ? null : _pickFile,
               icon: const Icon(Icons.upload_file, size: 22),
               label: Text(
-                _fileName ?? loc(context, 'select_file'),
+                _fileName ?? loc('select_file'),
                 style: const TextStyle(fontSize: 16),
               ),
               style: OutlinedButton.styleFrom(
@@ -489,8 +471,6 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
             ),
-
-            // Parsed Data Info
             if (_parsedData.isNotEmpty) ...[
               const SizedBox(height: 16),
               Card(
@@ -506,7 +486,7 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
                           Icon(Icons.check_circle, color: Colors.green.shade600, size: 20),
                           const SizedBox(width: 8),
                           Text(
-                            '${_parsedData.length} ${loc(context, 'items_found')}',
+                            '${_parsedData.length} ${loc('items_found')}',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color: Colors.green.shade700,
@@ -518,9 +498,8 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
                       const SizedBox(height: 12),
                       const Divider(height: 1),
                       const SizedBox(height: 12),
-                      // Preview first 5 items
                       Text(
-                        loc(context, 'preview'),
+                        loc('preview'),
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
@@ -529,8 +508,8 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
                         child: Row(
                           children: [
                             Icon(
-                               Uri.tryParse(item)?.hasScheme == true ? Icons.qr_code_2 : RegExp(r'^\d+$').hasMatch(item) ? Icons.view_week : Icons.qr_code_2, 
-                               size: 16, 
+                               Uri.tryParse(item)?.hasScheme == true ? Icons.qr_code_2 : RegExp(r'^\d+$').hasMatch(item) ? Icons.view_week : Icons.qr_code_2,
+                               size: 16,
                                color: Theme.of(context).colorScheme.primary
                             ),
                             const SizedBox(width: 8),
@@ -549,7 +528,7 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
                         Padding(
                           padding: const EdgeInsets.only(top: 4.0),
                           child: Text(
-                            '... +${_parsedData.length - 5} ${loc(context, 'more_items')}',
+                            '... +${_parsedData.length - 5} ${loc('more_items')}',
                             style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
                           ),
                         ),
@@ -558,8 +537,6 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
                 ),
               ),
             ],
-
-            // Progress Section
             if (_isProcessing) ...[
               const SizedBox(height: 24),
               Card(
@@ -595,8 +572,6 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
                 ),
               ),
             ],
-
-            // Done message
             if (!_isProcessing && _statusMessage.startsWith('Done')) ...[
               const SizedBox(height: 16),
               Card(
@@ -620,10 +595,7 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
                 ),
               ),
             ],
-
             const SizedBox(height: 32),
-
-            // Generate Button
             if (_parsedData.isNotEmpty && !_isProcessing)
               Container(
                 decoration: BoxDecoration(
@@ -646,7 +618,7 @@ class _BatchGeneratorScreenState extends State<BatchGeneratorScreen> {
                   onPressed: _generateAndExport,
                   icon: const Icon(Icons.auto_awesome, size: 22),
                   label: Text(
-                    '${loc(context, 'generate')} ${_parsedData.length} ${_selectedFormat == 'QR Code' ? 'QR' : _selectedFormat}',
+                    '${loc('generate')} ${_parsedData.length} ${_selectedFormat == 'QR Code' ? 'QR' : _selectedFormat}',
                     style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                   ),
                   style: ElevatedButton.styleFrom(

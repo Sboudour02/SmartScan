@@ -46,18 +46,18 @@ class ExportHelper {
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) {
-        final loc = AppLocalizations.of;
+        final loc = (String key) => AppLocalizations.of(context, key);
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(loc(context, 'choose_format'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                Text(loc('choose_format'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 16),
                 ListTile(
                   leading: const Icon(Icons.image, color: Colors.blue),
-                  title: Text(loc(context, 'export_as_png')),
+                  title: Text(loc('export_as_png')),
                   onTap: () {
                     Navigator.pop(context);
                     exportBoundary(context: context, key: boundaryKey, fileName: fileName, ext: 'png', isShare: true);
@@ -65,7 +65,7 @@ class ExportHelper {
                 ),
                 ListTile(
                   leading: const Icon(Icons.picture_as_pdf, color: Colors.blueAccent),
-                  title: Text(loc(context, 'export_as_pdf')),
+                  title: Text(loc('export_as_pdf')),
                   onTap: () {
                     Navigator.pop(context);
                     exportPDF(context: context, key: boundaryKey, fileName: fileName, isShare: true);
@@ -73,7 +73,7 @@ class ExportHelper {
                 ),
                 ListTile(
                   leading: const Icon(Icons.save_alt, color: Colors.green),
-                  title: Text(loc(context, 'save_local_png')),
+                  title: Text(loc('save_local_png')),
                   onTap: () {
                     Navigator.pop(context);
                     exportBoundary(context: context, key: boundaryKey, fileName: fileName, ext: 'png', isShare: false);
@@ -81,7 +81,7 @@ class ExportHelper {
                 ),
                 ListTile(
                   leading: const Icon(Icons.picture_as_pdf, color: Colors.green),
-                  title: Text(loc(context, 'save_local_pdf')),
+                  title: Text(loc('save_local_pdf')),
                   onTap: () {
                     Navigator.pop(context);
                     exportPDF(context: context, key: boundaryKey, fileName: fileName, isShare: false);

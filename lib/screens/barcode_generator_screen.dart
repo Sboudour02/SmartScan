@@ -135,7 +135,7 @@ class _BarcodeGeneratorScreenState extends State<BarcodeGeneratorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final loc = AppLocalizations.of;
+    final loc = (String key) => AppLocalizations.of(context, key);
 
     return Scaffold(
       body: SingleChildScrollView(
@@ -201,7 +201,7 @@ class _BarcodeGeneratorScreenState extends State<BarcodeGeneratorScreen> {
             
             // Format Selector
             Text(
-              loc(context, 'choose_format'),
+              loc('choose_format'),
               style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
@@ -262,7 +262,7 @@ class _BarcodeGeneratorScreenState extends State<BarcodeGeneratorScreen> {
                   ? [FilteringTextInputFormatter.digitsOnly] 
                   : null,
               decoration: InputDecoration(
-                labelText: loc(context, 'content_type'),
+                labelText: loc('content_type'),
                 hintText: _isNumericFormat(_selectedType['name']) 
                     ? 'Enter numbers only...' 
                     : 'Enter text or numbers...',
@@ -287,7 +287,7 @@ class _BarcodeGeneratorScreenState extends State<BarcodeGeneratorScreen> {
                 onPressed: _barcodeData.isEmpty ? null : _handleExport,
                 icon: const Icon(Icons.ios_share, size: 20),
                 label: Text(
-                  loc(context, 'export'),
+                  loc('export'),
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 style: ElevatedButton.styleFrom(

@@ -43,3 +43,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+SmartScan_v2.zip
+*.jpeg
+*.jpg
+dist_fixed/
+fix_regex.py
+build/

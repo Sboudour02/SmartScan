@@ -47,23 +47,23 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Future<void> _clearHistory() async {
-    final loc = AppLocalizations.of;
+    final loc = (String key) => AppLocalizations.of(context, key);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(loc(context, 'clear_history_title')),
-        content: Text(loc(context, 'clear_history_msg')),
+        title: Text(loc('clear_history_title')),
+        content: Text(loc('clear_history_msg')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(loc(context, 'cancel')),
+            child: Text(loc('cancel')),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             child: Text(
-              loc(context, 'confirm'),
+              loc('confirm'),
               style: const TextStyle(color: Colors.white),
             ),
           ),
@@ -97,7 +97,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final loc = AppLocalizations.of;
+    final loc = (String key) => AppLocalizations.of(context, key);
 
     return Center(
       child: _isLoading
@@ -108,7 +108,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   children: [
                     Icon(Icons.history, size: 80, color: Colors.grey.shade400),
                     const SizedBox(height: 16),
-                    Text(loc(context, 'history_empty'), style: TextStyle(color: Colors.grey.shade500, fontSize: 18)),
+                    Text(loc('history_empty'), style: TextStyle(color: Colors.grey.shade500, fontSize: 18)),
                   ],
                 )
               : Column(
@@ -126,18 +126,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                 });
                               },
                               icon: const Icon(Icons.close),
-                              label: Text(loc(context, 'clear')),
+                              label: Text(loc('clear')),
                             ),
                             TextButton.icon(
                               onPressed: _deleteSelected,
                               icon: Icon(Icons.delete, color: Theme.of(context).colorScheme.error),
-                              label: Text('${loc(context, 'delete_selected')} (${_selectedIds.length})', style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                              label: Text('${loc('delete_selected')} (${_selectedIds.length})', style: TextStyle(color: Theme.of(context).colorScheme.error)),
                             )
                           ] else ...[
                             TextButton.icon(
                               onPressed: _clearHistory,
                               icon: Icon(Icons.delete_sweep, color: Theme.of(context).colorScheme.error),
-                              label: Text(loc(context, 'clear'), style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                              label: Text(loc('clear'), style: TextStyle(color: Theme.of(context).colorScheme.error)),
                             )
                           ],
                         ],
@@ -194,7 +194,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   void _showHistoryItemDialog(BuildContext context, HistoryItem item) async {
-    // ═══ 🛡️ AntiGravity Security Check ═══
     if (SecurityHelper.containsSensitiveData(item.content)) {
       final langCode = mounted
           ? Provider.of<LocaleProvider>(context, listen: false).locale.languageCode
@@ -206,7 +205,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
         return;
       }
     }
-    // ═══ End Security Check ═══
 
     if (!context.mounted) return;
 
@@ -215,9 +213,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
     showDialog(
       context: context,
       builder: (context) {
-        final loc = AppLocalizations.of;
+        final loc = (String key) => AppLocalizations.of(context, key);
         return AlertDialog(
-          title: Text(item.type == 'QR' ? loc(context, 'qr_code') : loc(context, 'barcode_label')),
+          title: Text(item.type == 'QR' ? loc('qr_code') : loc('barcode_label')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -241,8 +239,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              SizedBox(
-                maxHeight: 100,
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 100),
                 child: SingleChildScrollView(
                   child: SelectableText(item.content, textAlign: TextAlign.center),
                 ),
@@ -252,7 +250,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text(loc(context, 'close')),
+              child: Text(loc('close')),
             ),
             ElevatedButton.icon(
               onPressed: () {
@@ -268,7 +266,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 });
               },
               icon: const Icon(Icons.download),
-              label: Text(loc(context, 'export')),
+              label: Text(loc('export')),
             ),
           ],
         );

@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:ota_update/ota_update.dart';
 import 'package:provider/provider.dart';
-import '../providers/locale_provider.dart';
+import '../utils/localization.dart';
 
 class UpdateManager {
   static const String _owner = 'Sboudour02';
@@ -145,15 +145,15 @@ class _UpdateDialogState extends State<_UpdateDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final loc = AppLocalizations.of;
+    final loc = (String key) => AppLocalizations.of(context, key);
 
     return AlertDialog(
-      title: Text(loc(context, 'update_available')),
+      title: Text(loc('update_available')),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('${loc(context, 'version')}: ${widget.version}'),
+          Text('${loc('version')}: ${widget.version}'),
           if (widget.notes.isNotEmpty) ...[
             const SizedBox(height: 8),
             const Divider(),
@@ -172,11 +172,11 @@ class _UpdateDialogState extends State<_UpdateDialog> {
           : [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: Text(loc(context, 'update_later')),
+                child: Text(loc('update_later')),
               ),
               ElevatedButton(
                 onPressed: _startUpdate,
-                child: Text(loc(context, 'update_now')),
+                child: Text(loc('update_now')),
               ),
             ],
     );

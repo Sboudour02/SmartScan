@@ -12,6 +12,7 @@ import '../utils/content_parser.dart';
 import '../providers/locale_provider.dart';
 import '../widgets/custom_barcode_overlay.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../utils/security_helper.dart';
 
 class ScannerScreen extends StatefulWidget {
   final bool isActive;
@@ -30,15 +31,16 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
   String? _barcodeValue;
   bool _isProcessing = false;
 
-  // Anti-False-Positive Local State
   final Map<String, int> _barcodeDetectionCounts = {};
   DateTime? _lastDetectionTime;
 
   late AnimationController _animationController;
 
-  late AnimationController _animationController;
+  bool _isUrl(String value) {
+    return Uri.tryParse(value)?.hasScheme ?? false;
+  }
 
-  bool get _isWifi => _barcodeValue?.toUpperCase().startsWith('WIFI:') ?? false;
+  bool get _isWifi => _barcodeValue != null && !_isUrl(_barcodeValue!) && _barcodeValue!.toUpperCase().startsWith('WIFI:');
   bool get _isVCard => _barcodeValue != null && (_barcodeValue!.toUpperCase().startsWith('BEGIN:VCARD') || _barcodeValue!.toUpperCase().startsWith('MECARD:'));
 
   String? _getWifiPassword() {
@@ -51,9 +53,9 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
     final pass = _getWifiPassword();
     if (pass != null && pass.isNotEmpty) {
       Clipboard.setData(ClipboardData(text: pass));
-      final loc = AppLocalizations.of;
+      final loc = (String key) => AppLocalizations.of(context, key);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(loc(context, 'copy_password'))),
+        SnackBar(content: Text(loc('copy_password'))),
       );
     }
   }
@@ -73,7 +75,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
         ),
       );
     } catch (e) {
-      _shareResult(); // fallback
+      _shareResult();
     }
   }
 
@@ -89,7 +91,6 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
       }
 
       String tempUrl = url.trim();
-      
       final lowerUrl = tempUrl.toLowerCase();
       if (lowerUrl.startsWith('mailto:')) return tempUrl.substring(7);
       if (lowerUrl.startsWith('tel:')) return tempUrl.substring(4);
@@ -110,22 +111,21 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
   Future<void> _openUrl() async {
     if (_barcodeValue == null) return;
     String url = _barcodeValue!.trim();
-    
-    // Don't prepend https:// if a known scheme is already present
+
     if (!ContentParser.hasScheme(url)) {
       url = 'https://$url';
     }
-    
+
     final uri = Uri.tryParse(url);
     if (uri != null && await canLaunchUrl(uri)) {
       try {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
       } catch (e) {
         if (mounted) {
-          final loc = AppLocalizations.of;
+          final loc = (String key) => AppLocalizations.of(context, key);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(loc(context, 'cannot_open_link')),
+              content: Text(loc('cannot_open_link')),
               backgroundColor: Colors.redAccent,
             ),
           );
@@ -133,10 +133,10 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
       }
     } else {
       if (mounted) {
-        final loc = AppLocalizations.of;
+        final loc = (String key) => AppLocalizations.of(context, key);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(loc(context, 'cannot_open_link')),
+            content: Text(loc('cannot_open_link')),
             backgroundColor: Colors.redAccent,
           ),
         );
@@ -160,7 +160,6 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
         _scannerController.start();
       } else {
         _scannerController.stop();
-        // Clean up stale detection counts when leaving scanner
         _barcodeDetectionCounts.clear();
       }
     }
@@ -176,8 +175,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
   bool _isValidBarcodeFormat(Barcode barcode) {
     if (barcode.rawValue == null || barcode.rawValue!.isEmpty) return false;
     final value = barcode.rawValue!;
-    
-    // We enforce length validation for common 1D barcodes that tend to throw false positives
+
     switch (barcode.format) {
       case BarcodeFormat.ean13:
         return value.length == 13 && RegExp(r'^\d{13}$').hasMatch(value);
@@ -191,52 +189,40 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
       case BarcodeFormat.code93:
       case BarcodeFormat.code128:
       case BarcodeFormat.itf14:
-        // These can have variable lengths, but checking if they are somewhat reasonable 
-        // helps avoid short noise (like 1 or 2 characters)
         return value.length >= 3;
       default:
-        // QR codes, DataMatrix, PDF417 etc are structurally safe and rarely false positive
         return true;
     }
   }
 
   Future<void> _handleBarcode(Barcode barcode) async {
     if (_isProcessing) return;
-
     if (!_isValidBarcodeFormat(barcode)) return;
 
-    // Debounce logic: wait for 2 consecutive detections within a recent time window
     final now = DateTime.now();
     final rawValue = barcode.rawValue!;
 
     if (_lastDetectionTime != null && now.difference(_lastDetectionTime!).inMilliseconds > 500) {
-      // Clear stale detections if scanning was paused
       _barcodeDetectionCounts.clear();
     }
-    
+
     _lastDetectionTime = now;
     _barcodeDetectionCounts.update(rawValue, (count) => count + 1, ifAbsent: () => 1);
 
-    if (_barcodeDetectionCounts[rawValue]! < 2) {
-      // Not enough consecutive detections yet
-      return;
-    }
+    if (_barcodeDetectionCounts[rawValue]! < 2) return;
 
     if (rawValue != _barcodeValue) {
-      // We have a confirmed detection!
       _barcodeDetectionCounts.clear();
       setState(() {
         _isProcessing = true;
       });
 
-      // ═══ 🛡️ AntiGravity Security Check ═══
       final securityResult = SecurityHelper.analyzeContent(rawValue);
       final langCode = mounted
           ? Provider.of<LocaleProvider>(context, listen: false).locale.languageCode
           : 'en';
 
       if (securityResult.level == SecurityLevel.blocked) {
-        // 🚫 BLOCK — Malicious content detected
         if (mounted) {
           await SecurityHelper.handleSecurityResult(context, securityResult, langCode: langCode);
           setState(() => _isProcessing = false);
@@ -245,7 +231,6 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
       }
 
       if (securityResult.level == SecurityLevel.warning) {
-        // ⚠️ WARN — Ask user confirmation
         if (mounted) {
           final proceed = await SecurityHelper.handleSecurityResult(context, securityResult, langCode: langCode);
           if (!proceed) {
@@ -256,19 +241,15 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
       }
 
       if (securityResult.level == SecurityLevel.sanitized && mounted) {
-        // 🧹 SANITIZED — Notify user, use clean version
         await SecurityHelper.handleSecurityResult(context, securityResult, langCode: langCode);
       }
 
-      // Use sanitized content if available, otherwise original
       final safeValue = securityResult.sanitizedContent ?? rawValue;
-      // ═══ End Security Check ═══
 
       setState(() {
         _barcodeValue = safeValue;
       });
 
-      // Save to History
       await HistoryManager.addHistory(HistoryItem(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         type: 'Scan',
@@ -278,7 +259,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
 
       HapticFeedback.vibrate();
       SystemSound.play(SystemSoundType.click);
-      
+
       await Future.delayed(const Duration(seconds: 2));
       if (mounted) {
         setState(() => _isProcessing = false);
@@ -289,17 +270,16 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
   Future<void> _pickImageFromGallery() async {
     final picker = ImagePicker();
     final xFile = await picker.pickImage(source: ImageSource.gallery);
-    
+
     if (xFile != null) {
       final BarcodeCapture? capture = await _scannerController.analyzeImage(xFile.path);
-      
       if (capture != null && capture.barcodes.isNotEmpty) {
         await _handleBarcode(capture.barcodes.first);
       } else {
         if (mounted) {
-          final loc = AppLocalizations.of;
+          final loc = (String key) => AppLocalizations.of(context, key);
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(loc(context, 'no_qr_found'))),
+            SnackBar(content: Text(loc('no_qr_found'))),
           );
         }
       }
@@ -309,9 +289,9 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
   void _copyToClipboard() {
     if (_barcodeValue != null) {
       Clipboard.setData(ClipboardData(text: _barcodeValue!));
-      final loc = AppLocalizations.of;
+      final loc = (String key) => AppLocalizations.of(context, key);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(loc(context, 'copied'))),
+        SnackBar(content: Text(loc('copied'))),
       );
     }
   }
@@ -324,7 +304,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
 
   @override
   Widget build(BuildContext context) {
-    final loc = AppLocalizations.of;
+    final loc = (String key) => AppLocalizations.of(context, key);
 
     return Stack(
       children: [
@@ -336,24 +316,17 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
             }
           },
         ),
-        
-        // Only show the dynamic yellow bounding box overlay when actively scanning/showing result
+
         if (_isProcessing || _barcodeValue != null)
           RepaintBoundary(
             child: CustomBarcodeOverlay(controller: _scannerController),
           ),
 
-        // Static Overlay & Scanning Animation Line
         StreamBuilder<BarcodeCapture>(
           stream: _scannerController.barcodes,
           builder: (context, snapshot) {
-            // Hide the static overlay ONLY when actively processing a barcode OR showing a result.
-            // This guarantees it reappears instantly upon dismissing the result card.
             final shouldHideStaticOverlay = _isProcessing || _barcodeValue != null;
-
-            if (shouldHideStaticOverlay) {
-              return const SizedBox.shrink(); // Hide static overlay to focus on the yellow bounding box
-            }
+            if (shouldHideStaticOverlay) return const SizedBox.shrink();
 
             return Stack(
               children: [
@@ -418,7 +391,6 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
           },
         ),
 
-        // Top Controls
         Positioned(
           top: 40,
           left: 16,
@@ -436,14 +408,13 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
               ),
               IconButton(
                 icon: const Icon(Icons.cameraswitch_rounded, color: Colors.white, size: 32),
-                tooltip: loc(context, 'switch_camera'),
+                tooltip: loc('switch_camera'),
                 onPressed: () => _scannerController.switchCamera(),
               ),
             ],
           ),
         ),
 
-        // Result Bottom Sheet View
         if (_barcodeValue != null)
           Align(
             alignment: Alignment.bottomCenter,
@@ -466,7 +437,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                     Row(
                       children: [
                         Icon(
-                          _isUrl ? Icons.language : Icons.qr_code_scanner,
+                          (_barcodeValue != null && _isUrl(_barcodeValue!)) ? Icons.language : Icons.qr_code_scanner,
                           color: Theme.of(context).colorScheme.primary
                         ),
                         const SizedBox(width: 8),
@@ -487,7 +458,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                             onTap: () {
                               setState(() {
                                 _barcodeValue = null;
-                                _isProcessing = false; // Reset the processing flag to immediately allow new scans
+                                _isProcessing = false;
                               });
                             },
                             child: Padding(
@@ -504,23 +475,23 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                     ),
                     const SizedBox(height: 16),
                     SizedBox(
-                      maxHeight: 80,
+                      height: 80,
                       child: SingleChildScrollView(
                         child: Text(
-                          _isUrl ? _getPreview(_barcodeValue!) : _barcodeValue!,
+                          (_barcodeValue != null && _isUrl(_barcodeValue!)) ? _getPreview(_barcodeValue!) : (_barcodeValue ?? ''),
                           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            fontSize: _isUrl ? 22 : 18,
-                            fontWeight: _isUrl ? FontWeight.bold : FontWeight.normal,
+                            fontSize: (_barcodeValue != null && _isUrl(_barcodeValue!)) ? 22 : 18,
+                            fontWeight: (_barcodeValue != null && _isUrl(_barcodeValue!)) ? FontWeight.bold : FontWeight.normal,
                           ),
                           textAlign: TextAlign.center,
                         ),
                       ),
                     ),
-                    if (_isUrl)
+                    if (_barcodeValue != null && _isUrl(_barcodeValue!))
                       Padding(
                         padding: const EdgeInsets.only(top: 8.0),
                         child: SizedBox(
-                          maxHeight: 60,
+                          height: 60,
                           child: SingleChildScrollView(
                             child: Text(
                               _barcodeValue!,
@@ -538,11 +509,11 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                       spacing: 12,
                       runSpacing: 12,
                       children: [
-                        if (_isUrl)
+                        if (_barcodeValue != null && _isUrl(_barcodeValue!))
                           ElevatedButton.icon(
                             onPressed: _openUrl,
                             icon: const Icon(Icons.open_in_browser),
-                            label: Text(loc(context, 'open')),
+                            label: Text(loc('open')),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Theme.of(context).colorScheme.primary,
                               foregroundColor: Theme.of(context).colorScheme.onPrimary,
@@ -552,7 +523,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                           ElevatedButton.icon(
                             onPressed: _copyWifiPassword,
                             icon: const Icon(Icons.copy),
-                            label: Text(loc(context, 'copy_password')),
+                            label: Text(loc('copy_password')),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Theme.of(context).colorScheme.primary,
                               foregroundColor: Theme.of(context).colorScheme.onPrimary,
@@ -562,7 +533,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                           ElevatedButton.icon(
                             onPressed: _shareVCard,
                             icon: const Icon(Icons.share),
-                            label: Text(loc(context, 'add_contact')),
+                            label: Text(loc('add_contact')),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Theme.of(context).colorScheme.primary,
                               foregroundColor: Theme.of(context).colorScheme.onPrimary,
@@ -571,12 +542,12 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                         ElevatedButton.icon(
                           onPressed: _copyToClipboard,
                           icon: const Icon(Icons.copy),
-                          label: Text(loc(context, 'copy')),
+                          label: Text(loc('copy')),
                         ),
                         ElevatedButton.icon(
                           onPressed: _shareResult,
                           icon: const Icon(Icons.share),
-                          label: Text(loc(context, 'share')),
+                          label: Text(loc('share')),
                         ),
                       ],
                     )

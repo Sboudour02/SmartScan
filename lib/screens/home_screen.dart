@@ -32,14 +32,14 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _runSecurityChecks() async {
     final results = await EnvironmentSecurity.checkEnvironment();
     if (!mounted) return;
-    
+
     final langCode = Provider.of<LocaleProvider>(context, listen: false).locale.languageCode;
     await EnvironmentSecurity.showEnvironmentWarnings(context, results, langCode: langCode);
   }
 
   @override
   Widget build(BuildContext context) {
-    final loc = AppLocalizations.of;
+    final loc = (String key) => AppLocalizations.of(context, key);
 
     final tabs = [
       const QrGeneratorScreen(), // QR Generator Screen
@@ -51,7 +51,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(loc(context, 'app_name')),
+        title: Text(loc('app_name')),
         centerTitle: true,
         elevation: 2,
       ),
@@ -73,23 +73,23 @@ class _HomeScreenState extends State<HomeScreen> {
         destinations: [
           NavigationDestination(
             icon: const Icon(Icons.qr_code_2),
-            label: loc(context, 'qr_short'),
+            label: loc('qr_short'),
           ),
           NavigationDestination(
             icon: const Icon(Icons.view_column),
-            label: loc(context, 'barcode_short'),
+            label: loc('barcode_short'),
           ),
           NavigationDestination(
             icon: const Icon(Icons.document_scanner),
-            label: loc(context, 'scanner'),
+            label: loc('scanner'),
           ),
           NavigationDestination(
             icon: const Icon(Icons.history),
-            label: loc(context, 'history'),
+            label: loc('history'),
           ),
           NavigationDestination(
             icon: const Icon(Icons.settings),
-            label: loc(context, 'settings'),
+            label: loc('settings'),
           ),
         ],
       ),
@@ -99,7 +99,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildSettingsTab(BuildContext context) {
     final localeProvider = Provider.of<LocaleProvider>(context);
     final themeProvider = Provider.of<ThemeProvider>(context);
-    final loc = AppLocalizations.of;
+    final loc = (String key) => AppLocalizations.of(context, key);
 
     return ListView(
       padding: const EdgeInsets.all(16.0),
@@ -109,19 +109,19 @@ class _HomeScreenState extends State<HomeScreen> {
           onChanged: (val) {
             themeProvider.toggleTheme(val);
           },
-          title: Text(loc(context, 'dark_mode')),
+          title: Text(loc('dark_mode')),
           secondary: Icon(themeProvider.themeMode == ThemeMode.dark ? Icons.dark_mode : Icons.light_mode),
         ),
         const Divider(),
         ListTile(
           leading: const Icon(Icons.language),
-          title: Text(loc(context, 'language')),
+          title: Text(loc('language')),
           trailing: DropdownButton<String>(
             value: localeProvider.locale.languageCode,
             underline: const SizedBox(),
             items: [
               DropdownMenuItem(
-                value: 'en', 
+                value: 'en',
                 child: Row(
                   children: [
                     Image.asset('assets/flags/uk.png', width: 24, height: 24),
@@ -131,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               DropdownMenuItem(
-                value: 'ar', 
+                value: 'ar',
                 child: Row(
                   children: [
                     Image.asset('assets/flags/algeria.png', width: 24, height: 24),
@@ -141,7 +141,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               DropdownMenuItem(
-                value: 'fr', 
+                value: 'fr',
                 child: Row(
                   children: [
                     Image.asset('assets/flags/france.png', width: 24, height: 24),
@@ -161,8 +161,8 @@ class _HomeScreenState extends State<HomeScreen> {
         const Divider(),
         ListTile(
           leading: const Icon(Icons.batch_prediction),
-          title: Text(loc(context, 'batch_generation')),
-          subtitle: Text(loc(context, 'csv_support')),
+          title: Text(loc('batch_generation')),
+          subtitle: Text(loc('csv_support')),
           trailing: const Icon(Icons.chevron_right),
           onTap: () {
             Navigator.push(context, MaterialPageRoute(builder: (_) => const BatchGeneratorScreen()));

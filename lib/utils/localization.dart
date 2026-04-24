@@ -72,8 +72,6 @@ class AppLocalizations {
       'batch_empty_msg': 'Upload a CSV or Excel file to start generating barcodes in bulk.',
       'batch_upload_cta': 'Upload your first file',
     },
-    },
-    },
     'ar': {
       'app_name': 'سمارت سكان',
       'qr_generator': 'إنشاء QR',
@@ -142,8 +140,6 @@ class AppLocalizations {
       'batch_empty_msg': 'ارفع ملف CSV أو Excel للبدء في توليد الباركود بالجملة.',
       'batch_upload_cta': 'ارفع ملفك الأول',
     },
-    },
-    },
     'fr': {
       'app_name': 'SmartScan',
       'qr_generator': 'Générer QR',
@@ -211,8 +207,6 @@ class AppLocalizations {
       'batch_empty_title': 'Aucun fichier sélectionné',
       'batch_empty_msg': 'Importez un fichier CSV ou Excel pour commencer à générer des codes-barres en masse.',
       'batch_upload_cta': 'Importer votre premier fichier',
-    },
-    },
     },
   };
 

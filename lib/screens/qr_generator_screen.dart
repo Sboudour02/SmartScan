@@ -18,7 +18,7 @@ class QrGeneratorScreen extends StatefulWidget {
 
 class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
   final GlobalKey _globalKey = GlobalKey();
-  
+
   String _qrData = 'SmartScan App';
   Color _qrColor = Colors.black;
   bool _isRoundEye = false;
@@ -34,7 +34,7 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
   };
 
   final List<String> _formats = ['PNG', 'JPEG', 'PDF', 'SVG'];
-  
+
   final TextEditingController _dataController = TextEditingController(text: 'https://smartscan.example.com');
   final TextEditingController _wifiSsidController = TextEditingController();
   final TextEditingController _wifiPassController = TextEditingController();
@@ -48,7 +48,7 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
   final TextEditingController _cryptoAmountController = TextEditingController();
   final TextEditingController _subjectController = TextEditingController();
   final TextEditingController _messageController = TextEditingController();
-  
+
   final List<String> _templates = [
     'URL',
     'Text',
@@ -156,7 +156,7 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
       setState(() => _qrData = securityResult.sanitizedContent ?? _qrData);
     }
     // ═══ End Security Check ═══
-    
+
     // Add to History
     await HistoryManager.addHistory(HistoryItem(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -194,7 +194,7 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final loc = AppLocalizations.of;
+    final loc = (String key) => AppLocalizations.of(context, key);
 
     return Scaffold(
       body: SingleChildScrollView(
@@ -261,7 +261,7 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
 
             // Content Templates List
             Text(
-              loc(context, 'content_type'),
+              loc('content_type'),
               style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
@@ -431,7 +431,7 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
             ],
 
             const SizedBox(height: 24),
-            
+
             // Design Customizations
             Container(
               padding: const EdgeInsets.all(16),
@@ -443,11 +443,11 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    loc(context, 'colors'),
+                    loc('colors'),
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Color Selection
                   SizedBox(
                     height: 48,
@@ -477,10 +477,10 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  
+
                   // Shape Selection
                   Text(
-                    loc(context, 'eye_shape'),
+                    loc('eye_shape'),
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
@@ -488,14 +488,14 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
                     spacing: 8,
                     children: [
                       ChoiceChip(
-                        label: Text(loc(context, 'square_eyes')),
+                        label: Text(loc('square_eyes')),
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         selected: !_isRoundEye,
                         onSelected: (val) => setState(() => _isRoundEye = !val),
                         selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
                       ),
                       ChoiceChip(
-                        label: Text(loc(context, 'round_eyes')),
+                        label: Text(loc('round_eyes')),
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         selected: _isRoundEye,
                         onSelected: (val) => setState(() => _isRoundEye = val),
@@ -507,7 +507,7 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
 
                   // QR Code Size
                   Text(
-                    loc(context, 'qr_size'),
+                    loc('qr_size'),
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
@@ -543,7 +543,7 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
 
                   // Download Format
                   Text(
-                    loc(context, 'download_format'),
+                    loc('download_format'),
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
@@ -576,7 +576,7 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
                     onPressed: _pickLogo,
                     icon: Icon(Icons.add_photo_alternate, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     label: Text(
-                      _logoPath != null ? '${loc(context, 'pick_logo')} ✓' : loc(context, 'pick_logo'),
+                      _logoPath != null ? '${loc('pick_logo')} ✓' : loc('pick_logo'),
                       style: TextStyle(
                         fontSize: 13,
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -591,9 +591,9 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
                 ],
               ),
             ),
-            
+
             const SizedBox(height: 24),
-            
+
             // Export Button (Primary - Main CTA)
             Container(
               width: double.infinity,
@@ -621,7 +621,7 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
                   size: 22,
                 ),
                 label: Text(
-                  '${loc(context, 'export')} ($_selectedFormat)',
+                  '${loc('export')} ($_selectedFormat)',
                   style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                 ),
                 style: ElevatedButton.styleFrom(

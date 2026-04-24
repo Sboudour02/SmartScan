@@ -54,6 +54,9 @@ dependencies:
   qr: ^3.0.2
   url_launcher: ^6.3.2
   async_zip: ^0.1.0
+  http: ^1.2.0
+  package_info_plus: ^8.0.0
+  ota_update: ^7.0.0
 
 dev_dependencies:
   flutter_test:
